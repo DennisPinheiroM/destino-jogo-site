@@ -1720,7 +1720,9 @@ function advance() {
   const b = beat();
   if (G.typing) { G.typing.finish(); return; }
   if (G.waking || !G.ready || b.choice || b.end) return;
-  if (G.i < STORY[G.node].beats.length - 1) { G.i++; play(); }
+  const node = STORY[G.node];
+  if (G.i < node.beats.length - 1) { G.i++; play(); }
+  else if (node.next && STORY[node.next]) { G.node = node.next; G.i = node.nextAt || 0; play(); } // desvio voltando ao gargalo
 }
 
 function goNode(name) { G.node = name; G.i = 0; play(); }

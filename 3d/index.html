@@ -2619,7 +2619,9 @@ function advance() {
   if (G.typing) { G.typing.finish(); return; }
   const b = beat();
   if (G.waking || !G.ready || b.choice || b.end) return;
-  if (G.i < STORY[G.node].beats.length - 1) { G.i++; play(); }
+  const node = STORY[G.node];
+  if (G.i < node.beats.length - 1) { G.i++; play(); }
+  else if (node.next && STORY[node.next]) { G.node = node.next; G.i = node.nextAt || 0; play(); } // desvio voltando ao gargalo
 }
 function goNode(name) { G.node = name; G.i = 0; play(); }
 function endCycle() {
@@ -2690,8 +2692,10 @@ $('#begin').addEventListener('click', e => { e.stopPropagation(); start(); });
 function flushTweens() { let n = 0; while (tweens.length && n++ < 500) { const o = tweens.shift(); o.on(1, 1); o.done && o.done(); } }
 function seek(node, idx) {
   let nd = 'inicio', i = 0;
-  while (!(nd === node && i === idx)) {
+  let guard = 0;
+  while (!(nd === node && i === idx) && guard++ < 400) {
     const b = STORY[nd].beats[i];
+    if (!b) { if (STORY[nd].next) { nd = STORY[nd].next; i = STORY[nd].nextAt || 0; continue; } break; } // fim do caminho desenhado
     if (b.bat != null) CTX.bat = b.bat;
     if (b.env) setEnv(b.env, true);
     if (b.cam) { const l = [].concat(b.cam); l.forEach(c => { if (c.p) CAM.p.set(...c.p); if (c.l) CAM.l.set(...c.l); }); }
@@ -2702,7 +2706,7 @@ function seek(node, idx) {
     flushTweens(); G.shake = 0;
     if (b.choice) { nd = b.choice.opts.find(o => o[2])[2]; i = 0; } else i++;
   }
-  G.node = nd; G.i = i; renderHud(); noteEl.innerHTML = ''; reachEl.innerHTML = '';
+  G.node = node; G.i = idx; renderHud(); // trechos fora do caminho desenhado começam direto noteEl.innerHTML = ''; reachEl.innerHTML = '';
 }
 
 /* ---------------- laço de quadros ---------------- */
