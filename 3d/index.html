@@ -1882,7 +1882,7 @@ function sculptCrawler() {
 }
 
 /* ---------- a mão do jogador segurando a lanterna (primeira pessoa) ----------
-   Lanterna no eixo Y local (cabeça para cima). A mão direita envolve o corpo:
+   Lanterna no eixo Y local; em world.js ela é deitada para apontar para a frente. A mão direita envolve o corpo:
    dorso do lado +x, dedos dando a volta pela frente (+z) até a ponta em -x,
    polegar por cima, punho e antebraço saindo para baixo e para a direita. */
 function sculptHand() {
@@ -1901,16 +1901,17 @@ function sculptHand() {
     ...fingers,
     { t: 'c', a: [.04, -.135, -.03], b: [.02, -.06, -.04], r1: .019, r2: .015, k: .015 },                 // base do polegar
     { t: 'c', a: [.02, -.06, -.04], b: [-.004, -.03, -.03], r1: .014, r2: .0125, k: .008 },               // polegar
-    { t: 'c', a: [.055, -.14, .0], b: [.09, -.36, .05], r1: .03, r2: .038, k: .03 },                     // punho e antebraço
+    { t: 'c', a: [.055, -.14, .0], b: [.3, -.5, .36], r1: .03, r2: .042, k: .03 },                     // punho e antebraço
     { t: 'e', c: [.062, -.15, .0], r: [.03, .03, .033], k: .02 },
     { t: 'c', a: [.07, -.07, .022], b: [.06, -.13, .02], r1: .003, sub: 1, k: .004 },                    // tendões
   ];
   const sdfHand = makeSDF(P, { noise: 0 });
   // a mão sobe até o polegar encostar sob a cabeça, como nos quadros; a lanterna é escavada dela para os dedos assentarem
   const up = .078;
-  const sdf = (x, y, z) => SC.smax(sdfHand(x, y - up, z), -(Math.hypot(x, z) - .027), .004);
+  // espelhada em z: vista de trás, a mão direita mostra o polegar e o dorso, com os dedos do outro lado
+  const sdf = (x, y, z) => SC.smax(sdfHand(x, y - up, -z), -(Math.hypot(x, z) - .027), .004);
   const g = new T3.Group();
-  const hand = meshSDF(sdf, [-.05, -.37 + up, -.075], [.15, up, .095], .0034, 0xeae6e0, 0x3a3734);
+  const hand = meshSDF(sdf, [-.05, -.55 + up, -.42], [.36, up, .075], .0034, 0xeae6e0, 0x3a3734);
   g.add(hand);
   const dark = M(0x2b2b2b), darker = M(0x1d1d1d);
   // cabo curto: só a ponta arredondada aparece abaixo dos dedos
@@ -2373,8 +2374,10 @@ function buildWorld() {
   }
   plane(.22, .09, MB(0x0a0202), 0, .575, .5, 0, 0, CR);                         // fundo da boca
   // a mão do jogador com a lanterna, presa à câmera
-  const fp = sculptHand(); fp.visible = false; camera.add(fp); OBJ.fpv = fp;
-  fp.userData.base = new T3.Vector3(.08, -.155, -.5); fp.position.copy(fp.userData.base); fp.rotation.set(.34, .1, .22);
+  // a lanterna deitada, apontando para a frente: o eixo dela vai para dentro da cena, o polegar por cima
+  const fp = new T3.Group(), held = sculptHand(); fp.add(held); fp.visible = false; camera.add(fp); OBJ.fpv = fp;
+  held.rotation.set(-1.42, .14, 0, 'YXZ'); fp.userData.setBattery = held.userData.setBattery;
+  fp.userData.base = new T3.Vector3(.11, -.17, -.56); fp.position.copy(fp.userData.base);
   const fill = new T3.PointLight(0xffffff, 0, .8, 2); fill.position.set(.04, -.02, -.3); camera.add(fill); OBJ.fill = fill;
   // a saída: porta vermelha caída no nevoeiro
   const EX = new T3.Group(); EX.position.set(0, 0, 14); VV.add(EX);
@@ -3219,7 +3222,7 @@ function frame(ms) {
   if (OBJ.fpv && OBJ.fpv.visible) {
     const fp = OBJ.fpv, b = fp.userData.base, en = fp.userData.enter || 0, w = CAM.walk && !reduce ? 1 : 0;
     fp.position.set(b.x + Math.sin(now * 3.7) * .006 * w + MOUSE.x * -.008, b.y + Math.sin(now * 7.4) * .007 * w + Math.sin(now * 1.1) * .0025 - en * .3, b.z);
-    fp.rotation.z = .22 + Math.sin(now * 3.7) * .02 * w + en * .5;
+    fp.rotation.z = Math.sin(now * 3.7) * .02 * w + en * .5;
   }
   if (OBJ.face && OBJ.face.visible) OBJ.face.lookAt(camera.position);
   if (OBJ.candleLight) OBJ.candleLight.intensity = 1.5 + Math.sin(now * 13) * .12 + Math.sin(now * 7.3) * .1;
