@@ -72,7 +72,7 @@ body { font-family: var(--font-hand); -webkit-tap-highlight-color: transparent; 
 #choice .q { font-family: var(--font-letter); font-size: calc(var(--u) * 6.4); text-align: center; line-height: 1.05; margin-bottom: calc(var(--u) * 2.4);
   color: var(--graphite); filter: url(#graphite); text-wrap: balance; }
 #choice ol { list-style: none; margin: 0; padding: 0; display: grid; gap: calc(var(--u) * 1.2); }
-.opt { width: 100%; display: grid; grid-template-columns: calc(var(--u) * 6.4) 1fr auto; align-items: center; gap: calc(var(--u) * 2.4);
+.opt { width: 100%; display: grid; grid-template-columns: calc(var(--u) * 6.4) 1fr; align-items: center; gap: calc(var(--u) * 2.4);
   position: relative; font-family: var(--font-hand); font-weight: 600; font-size: calc(var(--u) * 6.2); line-height: 1.05; text-align: left;
   color: var(--graphite); background: none; border: 0; padding: calc(var(--u) * 1.1) calc(var(--u) * .6); cursor: pointer; filter: url(#graphite); }
 .opt .lbl { min-width: 0; }
@@ -81,12 +81,13 @@ body { font-family: var(--font-hand); -webkit-tap-highlight-color: transparent; 
 .opt .box path { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 .opt .box .tick { stroke-width: 4; stroke-dasharray: 50; stroke-dashoffset: 50; transition: stroke-dashoffset .45s ease; }
 .opt.picked .box .tick { stroke-dashoffset: 0; }
-.opt .under { position: absolute; left: calc(var(--u) * 9); right: calc(var(--u) * 12); bottom: 0; height: calc(var(--u) * 1.6); width: auto; overflow: visible; }
+.opt .under { position: absolute; left: calc(var(--u) * 9); right: calc(var(--u) * 4); bottom: 0; height: calc(var(--u) * 1.6); width: auto; overflow: visible; }
 .opt .under path { fill: none; stroke: var(--graphite); stroke-width: 2.4; stroke-dasharray: 210; stroke-dashoffset: 210; transition: stroke-dashoffset .5s ease; vector-effect: non-scaling-stroke; }
 .opt.open:hover .under path, .opt.open:focus-visible .under path, .opt.picked .under path { stroke-dashoffset: 0; }
 .opt.open:focus-visible { outline: none; }
 .opt.locked { color: var(--graphite-soft); cursor: not-allowed; }
-.opt .strike { position: absolute; left: calc(var(--u) * 8); right: calc(var(--u) * 10); top: 50%; height: calc(var(--u) * 3); width: auto; transform: translateY(-50%); overflow: visible; pointer-events: none; }
+.opt.locked .lbl { text-decoration: line-through; text-decoration-thickness: .08em; text-decoration-color: var(--graphite-soft); }
+.opt .strike { position: absolute; left: calc(var(--u) * 8); right: calc(var(--u) * 4); top: 50%; height: calc(var(--u) * 3); width: auto; transform: translateY(-50%); overflow: visible; pointer-events: none; }
 .opt .strike path { fill: none; stroke: var(--graphite-soft); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .opt.nope { animation: nope .4s ease; }
 @keyframes nope { 20% { transform: translateX(-6px) rotate(-1deg); } 50% { transform: translateX(5px); } 80% { transform: translateX(-3px); } }
@@ -2636,9 +2637,9 @@ function showChoice(c) {
   const opts = c.opts.map((o, k) => {
     const [label, pct, go] = o, open = !!go;
     return `<li><button type="button" id="opt-${G.node}-${k}" class="opt ${open ? 'open' : 'locked'}" data-k="${k}" ${open ? '' : 'aria-disabled="true"'}
-      aria-label="${label.replace(/<[^>]+>/g, ' ')} — ${pct}%${open ? '' : ' — caminho ainda não desenhado'}">
-      ${BOX}<span class="lbl">${label}</span><span class="pct">${pct}%</span>
-      ${open ? '<svg class="under" viewBox="0 0 200 10" preserveAspectRatio="none" aria-hidden="true"><path d="M2,6 C50,3 120,8 198,4"/></svg>' : '<svg class="strike" viewBox="0 0 200 20" preserveAspectRatio="none" aria-hidden="true"><path d="M2,12 C40,8 70,14 110,9 C140,6 170,12 198,8"/></svg>'}
+      aria-label="${label.replace(/<[^>]+>/g, ' ')}${open ? '' : ' — caminho ainda não desenhado'}">
+      ${BOX}<span class="lbl">${label}</span>
+      ${open ? '<svg class="under" viewBox="0 0 200 10" preserveAspectRatio="none" aria-hidden="true"><path d="M2,6 C50,3 120,8 198,4"/></svg>' : ''}
     </button></li>`;
   }).join('');
   choiceEl.innerHTML = `<div class="q">${c.q}</div><ol>${opts}</ol><p class="foot" aria-live="polite">os outros caminhos ainda não foram desenhados</p>`;
