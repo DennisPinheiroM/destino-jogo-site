@@ -1,0 +1,1788 @@
+<meta charset="utf-8">
+<title>Destino</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Courier+Prime:wght@400;700&family=Patrick+Hand+SC&family=Rock+Salt&family=Shadows+Into+Light&display=swap">
+<style>
+/* Quadro vertical 9:16 no centro da tela, como os stories originais.
+   Mundo único e escuro: grafite, papel, nanquim e um vermelho de tinta. */
+:root {
+  --void: #050505;
+  --paper: #efeee9;
+  --graphite: #2c2c30;
+  --graphite-soft: #8d8d93;
+  --ink-red: #c3120c;
+  --neon: #ff2a17;
+  --font-type: "Courier Prime", "Courier New", monospace;
+  --font-hand: "Caveat", "Segoe Print", cursive;
+  --font-letter: "Patrick Hand SC", "Comic Sans MS", cursive;
+  --font-whisper: "Shadows Into Light", "Segoe Print", cursive;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; background: var(--void); color: var(--paper); overflow: hidden; }
+body { font-family: var(--font-hand); -webkit-tap-highlight-color: transparent; }
+
+#app { position: fixed; inset: 0; display: grid; place-items: center; background: var(--void); container-type: size;
+  padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+#stage { position: relative; height: 100cqh; width: min(100cqw, 100cqh * 9 / 16); overflow: hidden;
+  container-type: size; background: #000; cursor: pointer; user-select: none; -webkit-user-select: none;
+  --u: min(1cqw, .5625cqh); }
+#layers, #layers svg.layer { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* ---------- textos ---------- */
+#type { position: absolute; left: 7%; right: 7%; text-align: center; font-family: var(--font-type); font-weight: 700;
+  font-size: calc(var(--u) * 4.6); line-height: 1.35; letter-spacing: .02em; pointer-events: none; text-wrap: balance; }
+#type .caret { display: inline-block; width: .55em; height: 1.05em; margin-left: .08em; vertical-align: -.18em; background: currentColor; animation: caret 1s steps(1) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+
+#say { position: absolute; max-width: 90%; font-family: var(--font-whisper); color: #e5281b; --say-size: calc(var(--u) * 5.3);
+  font-size: var(--say-size); line-height: 1.32; letter-spacing: .04em; pointer-events: none; white-space: nowrap;
+  text-shadow: 0 0 .35em rgba(255, 40, 20, .55), 0 0 .08em rgba(255, 60, 40, .9); }
+#say.in { animation: sayIn 1.4s ease both; }
+@keyframes sayIn { from { opacity: 0; filter: blur(4px); } to { opacity: 1; filter: blur(0); } }
+
+#hint { position: absolute; left: 0; right: 0; bottom: 2.2%; text-align: center; font-family: var(--font-hand); font-weight: 600;
+  font-size: calc(var(--u) * 4.2); color: #fff; mix-blend-mode: difference; opacity: 0; transition: opacity .6s; pointer-events: none; }
+#hint.on { opacity: .55; animation: hintPulse 2.4s ease-in-out infinite; }
+@keyframes hintPulse { 50% { opacity: .25; } }
+
+/* ---------- HUD ---------- */
+.hud { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: calc(var(--u) * 3);
+  padding: calc(var(--u) * 3) calc(var(--u) * 4); font-family: var(--font-hand); font-size: calc(var(--u) * 4.4); font-weight: 600;
+  color: #fff; mix-blend-mode: difference; z-index: 5; }
+#cycle { margin-right: auto; opacity: .7; letter-spacing: .03em; }
+#cycle b { font-weight: 700; }
+.hud button { font: inherit; color: inherit; background: none; border: 0; padding: .1em .3em; cursor: pointer; opacity: .7; position: relative; }
+.hud button:hover, .hud button:focus-visible { opacity: 1; }
+.hud button:focus-visible { outline: 2px dashed currentColor; outline-offset: 2px; }
+#snd[aria-pressed="false"] span { text-decoration: line-through; text-decoration-thickness: 2px; }
+
+/* ---------- cartão de escolha (papel e grafite) ---------- */
+#choice { position: absolute; left: 50%; top: 64%; width: 80%; transform: translate(-50%, -50%) rotate(-1.2deg);
+  background: var(--paper); color: var(--graphite); padding: calc(var(--u) * 4) calc(var(--u) * 5) calc(var(--u) * 3);
+  clip-path: polygon(0% 2%, 6% 0%, 14% 1.5%, 23% .2%, 31% 1.8%, 40% .4%, 52% 1.6%, 61% 0%, 72% 1.4%, 83% .3%, 92% 1.7%, 100% .5%, 99.4% 50%, 100% 99%, 90% 98.2%, 79% 100%, 66% 98.6%, 55% 99.8%, 43% 98.4%, 30% 99.7%, 18% 98.5%, 8% 100%, 0% 98.8%, .6% 50%);
+  background-image: repeating-linear-gradient(transparent 0 calc(var(--u) * 7.6), rgba(70, 110, 160, .18) calc(var(--u) * 7.6) calc(var(--u) * 7.75));
+  box-shadow: 0 1.5em 3em rgba(0, 0, 0, .5); cursor: default; z-index: 4; }
+#choice.in { animation: cardIn .7s cubic-bezier(.2, .8, .3, 1) both; }
+#choice.out { animation: cardOut .45s ease-in both; }
+@keyframes cardIn { from { opacity: 0; transform: translate(-50%, -42%) rotate(2deg); } }
+@keyframes cardOut { to { opacity: 0; transform: translate(-50%, -56%) rotate(-3deg); } }
+#choice .q { font-family: var(--font-letter); font-size: calc(var(--u) * 6.4); text-align: center; line-height: 1.05; margin-bottom: calc(var(--u) * 2.4);
+  color: var(--graphite); filter: url(#graphite); text-wrap: balance; }
+#choice ol { list-style: none; margin: 0; padding: 0; display: grid; gap: calc(var(--u) * 1.2); }
+.opt { width: 100%; display: grid; grid-template-columns: calc(var(--u) * 6.4) 1fr auto; align-items: center; gap: calc(var(--u) * 2.4);
+  position: relative; font-family: var(--font-hand); font-weight: 600; font-size: calc(var(--u) * 6.2); line-height: 1.05; text-align: left;
+  color: var(--graphite); background: none; border: 0; padding: calc(var(--u) * 1.1) calc(var(--u) * .6); cursor: pointer; filter: url(#graphite); }
+.opt .lbl { min-width: 0; }
+.opt .pct { font-size: .82em; opacity: .75; font-variant-numeric: tabular-nums; }
+.opt .box { width: 100%; height: auto; overflow: visible; }
+.opt .box path { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.opt .box .tick { stroke-width: 4; stroke-dasharray: 50; stroke-dashoffset: 50; transition: stroke-dashoffset .45s ease; }
+.opt.picked .box .tick { stroke-dashoffset: 0; }
+.opt .under { position: absolute; left: calc(var(--u) * 9); right: calc(var(--u) * 12); bottom: 0; height: calc(var(--u) * 1.6); width: auto; overflow: visible; }
+.opt .under path { fill: none; stroke: var(--graphite); stroke-width: 2.4; stroke-dasharray: 210; stroke-dashoffset: 210; transition: stroke-dashoffset .5s ease; vector-effect: non-scaling-stroke; }
+.opt.open:hover .under path, .opt.open:focus-visible .under path, .opt.picked .under path { stroke-dashoffset: 0; }
+.opt.open:focus-visible { outline: none; }
+.opt.locked { color: var(--graphite-soft); cursor: not-allowed; }
+.opt .strike { position: absolute; left: calc(var(--u) * 8); right: calc(var(--u) * 10); top: 50%; height: calc(var(--u) * 3); width: auto; transform: translateY(-50%); overflow: visible; pointer-events: none; }
+.opt .strike path { fill: none; stroke: var(--graphite-soft); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.opt.nope { animation: nope .4s ease; }
+@keyframes nope { 20% { transform: translateX(-6px) rotate(-1deg); } 50% { transform: translateX(5px); } 80% { transform: translateX(-3px); } }
+#choice .foot { margin: calc(var(--u) * 2) 0 0; text-align: right; font-family: var(--font-hand); font-size: calc(var(--u) * 4); color: var(--graphite-soft); filter: url(#graphite); }
+#choice .foot.warn { color: var(--ink-red); }
+
+/* ---------- tela de título e troca de ciclo ---------- */
+#title { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; z-index: 6;
+  background: radial-gradient(120% 80% at 50% 40%, #b80202 0%, #8f0000 70%, #6a0000 100%); color: #120000; transition: opacity .9s ease; cursor: default; }
+#title.gone { opacity: 0; pointer-events: none; }
+#title .inner { display: grid; gap: calc(var(--u) * 3); justify-items: center; padding: 0 8%; }
+#title h1 { margin: 0; font-family: var(--font-letter); font-weight: 400; font-size: calc(var(--u) * 21); letter-spacing: .06em; line-height: .9; filter: url(#inkHtml); }
+#title p { margin: 0; font-family: var(--font-type); font-size: calc(var(--u) * 3.6); line-height: 1.5; max-width: 30ch; opacity: .85; }
+#begin { margin-top: calc(var(--u) * 6); font-family: var(--font-hand); font-weight: 700; font-size: calc(var(--u) * 8); color: #120000; background: none; border: 0; cursor: pointer; position: relative; padding: .1em .7em; }
+#begin svg { position: absolute; inset: -18% -6%; width: 112%; height: 136%; overflow: visible; pointer-events: none; }
+#begin svg path { fill: none; stroke: #120000; stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 520; stroke-dashoffset: 520; animation: draw 1.6s .6s ease forwards; }
+#begin:focus-visible { outline: 2px dashed #120000; outline-offset: 6px; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+#title .keys { font-family: var(--font-hand); font-size: calc(var(--u) * 4); opacity: .7; }
+
+#cycleCard { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: calc(var(--u) * 2); z-index: 6; pointer-events: none; color: #fff; }
+#cycleCard .n { font-family: var(--font-letter); font-size: calc(var(--u) * 12); filter: url(#inkHtml); }
+#cycleCard .s { font-family: var(--font-type); font-size: calc(var(--u) * 3.6); opacity: .75; }
+#cycleCard.go { animation: cycleIn 4.2s ease both; background: rgba(0, 0, 0, .0); }
+@keyframes cycleIn { 0% { opacity: 0; background: rgba(0,0,0,0); } 20%, 75% { opacity: 1; background: rgba(0,0,0,.85); } 100% { opacity: 0; background: rgba(0,0,0,1); } }
+
+#flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 3; }
+#flash.go { animation: flash .9s ease-out; }
+@keyframes flash { 0% { opacity: .95; } 100% { opacity: 0; } }
+#stage.shake { animation: shakeStage .5s; }
+@keyframes shakeStage { 20% { transform: translate(-8px, 4px); } 40% { transform: translate(7px, -5px); } 60% { transform: translate(-5px, -3px); } 80% { transform: translate(3px, 4px); } }
+
+.grain { position: absolute; inset: -50%; pointer-events: none; z-index: 2; opacity: .09; mix-blend-mode: overlay; animation: grain 1s steps(6) infinite; }
+@keyframes grain { 0% { transform: translate(0, 0); } 20% { transform: translate(-7%, 4%); } 40% { transform: translate(5%, -6%); } 60% { transform: translate(-4%, -3%); } 80% { transform: translate(6%, 5%); } }
+
+/* ---------- animações dentro das cenas (coordenadas do quadro 720x1280) ---------- */
+svg.layer [class] { transform-box: view-box; transform-origin: 360px 640px; }
+.pulse { animation: pulse 2.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .55; } }
+.lampGlow { animation: lamp 5s ease-in-out infinite; }
+@keyframes lamp { 50% { opacity: .75; } 52% { opacity: .5; } 54% { opacity: .8; } }
+.push { animation: push 9s ease-out both; }
+@keyframes push { from { transform: scale(1); } to { transform: scale(1.18); } }
+.pushSlow { animation: push 14s ease-out both; }
+.pushFast { animation: pushFast 1.4s ease-in both; }
+@keyframes pushFast { to { transform: scale(2.6); opacity: .2; } }
+.sparkGrow { transform-origin: 360px 800px !important; animation: spark 2.6s ease-out both; }
+@keyframes spark { 0% { transform: scale(.2); opacity: 0; } 30% { opacity: 1; } 100% { transform: scale(2.2); } }
+.breath { animation: breath 4s ease-in-out infinite; }
+@keyframes breath { 50% { opacity: .35; } }
+.flick { animation: flick 3.2s steps(1) infinite; }
+@keyframes flick { 0%, 100% { opacity: 1; } 46% { opacity: .55; } 48% { opacity: 1; } 71% { opacity: .75; } 72% { opacity: 1; } }
+.doorGap { transform-origin: 0 640px !important; animation: gap 2.4s ease-in both; }
+@keyframes gap { from { transform: scaleX(.5); } to { transform: scaleX(1.7); } }
+.zoomHole { transform-origin: 400px 640px !important; animation: zoomHole 3.6s ease-in both; }
+@keyframes zoomHole { from { transform: scale(1); } to { transform: scale(1.8); } }
+.panLeft { animation: panLeft 2.6s cubic-bezier(.45, 0, .3, 1) both; }
+@keyframes panLeft { from { transform: translateX(0); } to { transform: translateX(-1200px); } }
+.doorKnock { animation: knock .7s .1s ease both; }
+@keyframes knock { 10%, 50% { transform: translateX(1.5px); } 30%, 70% { transform: translateX(-1.5px); } }
+.knockText { animation: fadeIn .3s .1s both; }
+@keyframes fadeIn { from { opacity: 0; } }
+.doorSwing { transform-origin: 0 640px !important; animation: swing 3s 0.4s ease-in-out both; }
+@keyframes swing { to { transform: scaleX(.86); } }
+.gapOpen { animation: gapOpen 3s .4s ease-in-out forwards; }
+@keyframes gapOpen { to { opacity: 1; transform: translateX(-90px) scaleX(2); } }
+.tiltUp { animation: tiltUp 6s cubic-bezier(.4, 0, .3, 1) both; }
+@keyframes tiltUp { from { transform: translateY(0); } to { transform: translateY(1120px); } }
+.tiltUpShort { animation: tiltUpS 4s cubic-bezier(.4, 0, .3, 1) both; }
+@keyframes tiltUpS { from { transform: translateY(-260px); } to { transform: translateY(80px); } }
+.dimIn { animation: dimIn 6s ease-in both; }
+@keyframes dimIn { from { opacity: 0; } }
+.paperFall { transform-origin: 0 0 !important; animation: paperFall 3.4s ease-in-out both; }
+@keyframes paperFall { 0% { transform: translate(360px, -60px) rotate(0) scale(.6); } 25% { transform: translate(300px, 260px) rotate(-28deg) scale(.8); }
+  50% { transform: translate(420px, 520px) rotate(22deg) scale(1.2); } 75% { transform: translate(330px, 800px) rotate(-14deg) scale(2.2); } 100% { transform: translate(380px, 1050px) rotate(6deg) scale(5); } }
+.flapIn { animation: flapIn .6s ease-out both; }
+@keyframes flapIn { from { opacity: 0; transform: translateY(-40px); } }
+.sway { animation: sway 9s ease-in-out infinite; }
+@keyframes sway { 50% { transform: translateX(-10px) scale(1.02); } }
+.drift { animation: drift 18s ease-in-out infinite alternate; }
+@keyframes drift { to { transform: translateX(120px); } }
+.ribbonWave { animation: wave 5s ease-in-out infinite; }
+@keyframes wave { 50% { transform: translateY(-8px) skewY(-1deg); } }
+.neonFlick { animation: neon 4s steps(1) infinite; }
+@keyframes neon { 0%, 100% { opacity: 1; } 31% { opacity: .55; } 32% { opacity: 1; } 33% { opacity: .7; } 34% { opacity: 1; } 78% { opacity: .85; } }
+.pushHand { animation: pushHand 2.2s ease-in-out both; }
+@keyframes pushHand { 40% { transform: translateY(-14px) scale(1.02); } 100% { transform: translateY(20px) scale(.98); } }
+.flameFlick { animation: flame 1.8s ease-in-out infinite; }
+@keyframes flame { 25% { opacity: .82; } 50% { opacity: 1; } 70% { opacity: .9; } }
+.breathe { animation: breathe 5s ease-in-out infinite; }
+@keyframes breathe { 50% { transform: translateY(-4px); } }
+.eyesOn { animation: fadeIn 2s both; }
+.shake { animation: shakeSvg .5s 3; }
+@keyframes shakeSvg { 25% { transform: translate(-10px, 6px); } 50% { transform: translate(9px, -4px); } 75% { transform: translate(-6px, -6px); } }
+.runShake { animation: run .45s ease-in-out infinite; }
+@keyframes run { 25% { transform: translate(-8px, 10px) rotate(-.6deg); } 75% { transform: translate(8px, -6px) rotate(.6deg); } }
+.fadeOut { animation: fadeOutA 2.5s forwards; }
+@keyframes fadeOutA { to { opacity: 0; } }
+.approach { animation: approach 4s ease-in both; }
+@keyframes approach { from { transform: scale(.6); } to { transform: scale(2.2); } }
+.hover { animation: hover 3s ease-in-out infinite; }
+@keyframes hover { 50% { transform: translateY(-12px) rotate(1deg); } }
+.faceIn { transform-origin: 360px 300px !important; animation: faceIn 2.4s ease-out both; }
+@keyframes faceIn { from { transform: translateY(-260px) scale(.85); opacity: 0; } }
+.faceTwitch { transform-origin: 360px 300px !important; animation: twitch 3s steps(1) infinite; }
+@keyframes twitch { 0%, 100% { transform: none; } 40% { transform: rotate(3deg); } 42% { transform: rotate(-2deg) translateX(4px); } 44% { transform: none; } }
+.lunge { transform-origin: 360px 380px !important; animation: lunge .9s ease-in both; }
+@keyframes lunge { to { transform: translate(-40px, 200px) scale(3.6) rotate(-14deg); opacity: .6; } }
+.swallow { animation: swallow 1.8s ease-in both; }
+@keyframes swallow { from { transform: scale(1.4) translateY(120px); } to { transform: scale(.85) translateY(-60px); } }
+.lightGrow { transform-origin: 360px 560px !important; animation: lightGrow 2.8s ease-out both; }
+@keyframes lightGrow { from { transform: scale(.3); opacity: 0; } to { transform: scale(2.2); opacity: 1; } }
+.fadeFromBlack { animation: fromBlack 2.6s ease both; }
+@keyframes fromBlack { from { opacity: 1; } to { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  svg.layer * { animation: none !important; }
+  .grain, #hint.on { animation: none; }
+}
+
+/* movimento contínuo de câmera em todo quadro (nunca fica parado) */
+#layers svg.layer { transform-origin: 50% 55%; animation: kenburns 11s ease-out both; }
+@keyframes kenburns { from { transform: scale(1.0); } to { transform: scale(1.07) translateY(-1%); } }
+@media (prefers-reduced-motion: reduce) { #layers svg.layer { animation: none; } }
+
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- traço de nanquim tremido -->
+    <filter id="ink" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="3" result="t"/>
+      <feDisplacementMap in="SourceGraphic" in2="t" scale="3.2" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="inkHtml" x="-5%" y="-10%" width="110%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" seed="5" result="t"/>
+      <feDisplacementMap in="SourceGraphic" in2="t" scale="4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <!-- grafite: grão de lápis no texto das escolhas -->
+    <filter id="graphite" x="-2%" y="-10%" width="104%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="8" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  2.6 0 0 0 -.45" result="m"/>
+      <feComposite in="SourceGraphic" in2="m" operator="in" result="t"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="1" seed="2" result="d"/>
+      <feDisplacementMap in="t" in2="d" scale="1.6" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <!-- carvão em riscos verticais (troncos, pernas ao longe) -->
+    <filter id="charcoal" x="-25%" y="-5%" width="150%" height="110%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.4" result="s"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.26 0.008" numOctaves="3" seed="4" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  3.4 0 0 0 -0.95" result="a"/>
+      <feComposite in="s" in2="a" operator="in" result="t"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.012 0.003" numOctaves="2" seed="9" result="d"/>
+      <feDisplacementMap in="t" in2="d" scale="9" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="chalk" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="6" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  3.4 0 0 0 -1" result="a"/>
+      <feComposite in="SourceGraphic" in2="a" operator="in"/>
+    </filter>
+    <filter id="paperNoise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" seed="11" result="n"/>
+      <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1.6 0 0 0 -.55" result="a"/><feComposite in="SourceGraphic" in2="a" operator="in"/></filter>
+    <filter id="blur2" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2"/></filter>
+    <filter id="blur6" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="6"/></filter>
+    <filter id="blur18" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="18"/></filter>
+    <filter id="blur40" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="40"/></filter>
+    <filter id="motionV" x="-10%" y="-20%" width="120%" height="140%"><feGaussianBlur stdDeviation="2 20"/></filter>
+    <filter id="motionD" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="14 26"/></filter>
+    <filter id="glowW" x="-50%" y="-200%" width="200%" height="500%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glowR" x="-40%" y="-40%" width="180%" height="180%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="7" result="t"/>
+      <feDisplacementMap in="SourceGraphic" in2="t" scale="3" xChannelSelector="R" yChannelSelector="G" result="s"/>
+      <feGaussianBlur in="s" stdDeviation="4" result="b1"/><feGaussianBlur in="s" stdDeviation="16" result="b2"/>
+      <feMerge><feMergeNode in="b2"/><feMergeNode in="b1"/><feMergeNode in="s"/></feMerge>
+    </filter>
+
+    <linearGradient id="redBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b70303"/><stop offset=".6" stop-color="#a30000"/><stop offset="1" stop-color="#8a0000"/></linearGradient>
+    <radialGradient id="corrBg" gradientUnits="userSpaceOnUse" cx="360" cy="380" r="980"><stop offset="0" stop-color="#ffffff"/><stop offset=".28" stop-color="#ededed"/><stop offset=".7" stop-color="#b4b4b4"/><stop offset="1" stop-color="#7d7d7d"/></radialGradient>
+    <radialGradient id="tunnel" gradientUnits="userSpaceOnUse" cx="364" cy="600" r="760"><stop offset="0" stop-color="#000"/><stop offset=".07" stop-color="#1a1a1a"/><stop offset=".22" stop-color="#555"/><stop offset=".5" stop-color="#bdbdbd" stop-opacity=".6"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="tunnelDark" gradientUnits="userSpaceOnUse" cx="364" cy="620" r="800"><stop offset="0" stop-color="#000"/><stop offset=".25" stop-color="#111"/><stop offset=".7" stop-color="#2d2d2d"/><stop offset="1" stop-color="#3a3a3a"/></radialGradient>
+    <radialGradient id="vig" gradientUnits="userSpaceOnUse" cx="360" cy="640" r="900"><stop offset=".45" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".9"/></radialGradient>
+    <radialGradient id="vigSoft" gradientUnits="userSpaceOnUse" cx="380" cy="760" r="760"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></radialGradient>
+    <linearGradient id="doorLight" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity=".7"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".25"/></linearGradient>
+    <linearGradient id="floorFade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".14"/></linearGradient>
+    <linearGradient id="legShade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000" stop-opacity=".45"/><stop offset=".28" stop-color="#000" stop-opacity="0"/><stop offset=".72" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".55"/></linearGradient>
+    <linearGradient id="armFade" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset=".8" stop-color="#000" stop-opacity="1"/></linearGradient>
+    <radialGradient id="holeShade"><stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+    <linearGradient id="upDark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="1"/><stop offset=".6" stop-color="#000" stop-opacity=".5"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient>
+    <linearGradient id="forestSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#121212"/><stop offset=".55" stop-color="#2f2f2f"/><stop offset="1" stop-color="#151515"/></linearGradient>
+  </defs>
+</svg>
+
+<div id="app">
+  <main id="stage" aria-label="Destino — história interativa">
+    <div id="layers"></div>
+    <div class="grain" aria-hidden="true"></div>
+    <div id="flash" aria-hidden="true"></div>
+    <div id="type" aria-live="polite" hidden></div>
+    <div id="say" aria-live="polite" hidden></div>
+    <div id="choice" role="group" aria-label="Escolha" hidden></div>
+    <div id="hint" aria-hidden="true">toque para continuar</div>
+    <div class="hud">
+      <span id="cycle">ciclo <b>I</b></span>
+      <button type="button" id="restart" title="Voltar ao início do ciclo">recomeçar</button>
+      <button type="button" id="snd" aria-pressed="true" title="Ligar ou desligar o som"><span>som</span></button>
+    </div>
+    <section id="title">
+      <div class="inner">
+        <h1>DESTINO</h1>
+        <p>Um corredor, uma escolha, depois outra. Os caminhos que a maioria escolheu já foram desenhados.</p>
+        <button type="button" id="begin">começar<svg viewBox="0 0 200 80" preserveAspectRatio="none" aria-hidden="true"><path d="M30,12 C80,2 170,6 190,30 C204,58 140,76 80,74 C20,72 2,52 8,32 C14,16 40,8 70,8"/></svg></button>
+        <span class="keys">toque, espaço ou → para avançar · 1–4 para escolher</span>
+      </div>
+    </section>
+    <div id="cycleCard" hidden><div class="n">Ciclo II</div><div class="s">o destino está em suas mãos</div></div>
+  </main>
+</div>
+
+<script>
+/* ============================================================
+   DESTINO — núcleo de desenho
+   Tudo é SVG vetorial desenhado em código, num quadro 720x1280
+   (o formato vertical dos stories originais).
+   ============================================================ */
+'use strict';
+const W = 720, H = 1280;
+const INK = '#141414', PAPER = '#f4f4f1', RED = '#c3120c', NEON = '#ff2a17';
+const CTX = { bat: 21 };
+
+/* ---------- aleatório com semente (cada cena é sempre igual) ---------- */
+let _s = 7;
+function seed(n) { _s = (n * 2654435761) >>> 0 || 1; }
+function rnd() { _s ^= _s << 13; _s >>>= 0; _s ^= _s >>> 17; _s ^= _s << 5; _s >>>= 0; return _s / 4294967296; }
+const rr = (a, b) => a + rnd() * (b - a);
+const f1 = n => Math.round(n * 10) / 10;
+
+/* ---------- traço de nanquim tremido ---------- */
+function wl(pts, j = 1.3, step = 26) {
+  let d = '';
+  for (let k = 0; k < pts.length - 1; k++) {
+    const [x1, y1] = pts[k], [x2, y2] = pts[k + 1];
+    const n = Math.max(1, Math.round(Math.hypot(x2 - x1, y2 - y1) / step));
+    for (let s = k ? 1 : 0; s <= n; s++) {
+      const t = s / n;
+      let x = x1 + (x2 - x1) * t, y = y1 + (y2 - y1) * t;
+      if (s > 0 && s < n) { x += rr(-j, j); y += rr(-j, j); }
+      d += (d ? 'L' : 'M') + f1(x) + ',' + f1(y);
+    }
+  }
+  return d;
+}
+function ink(pts, w = 6, col = INK, extra = '') {
+  return `<path d="${wl(pts)}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" filter="url(#ink)" ${extra}/>`;
+}
+function inkD(d, w = 5, col = INK, extra = '') {
+  return `<path d="${d}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round" filter="url(#ink)" ${extra}/>`;
+}
+const rect = (x, y, w, h, fill, extra = '') => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}" ${extra}/>`;
+const poly = (pts, fill, extra = '') => `<polygon points="${pts.map(p => p.join(',')).join(' ')}" fill="${fill}" ${extra}/>`;
+const bg = fill => rect(-20, -20, W + 40, H + 40, fill);
+const vig = (o = 1) => rect(-20, -20, W + 40, H + 40, 'url(#vig)', `opacity="${o}"`);
+const dark = o => rect(-20, -20, W + 40, H + 40, '#000', `opacity="${o}"`);
+const grp = (inner, extra = '') => `<g ${extra}>${inner}</g>`;
+
+/* ---------- corpos com contorno único (mãos, lanterna) ----------
+   partes: {l:[[x,y]..], w} = dedo/segmento arredondado
+           {d:'path'}       = forma
+           {e:[cx,cy,rx,ry,rot]}
+   Primeiro passa o contorno de todas, depois o preenchimento:
+   o resultado é uma silhueta única com contorno de nanquim. */
+function body(parts, fill, ow = 4.5, col = INK, filt = true) {
+  let a = '', b = '';
+  for (const p of parts) {
+    const c = p.c || fill;
+    if (p.l) {
+      const d = 'M' + p.l.map(q => q.join(',')).join('L');
+      a += `<path d="${d}" fill="none" stroke="${col}" stroke-width="${p.w + ow * 2}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      b += `<path d="${d}" fill="none" stroke="${c}" stroke-width="${p.w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    } else if (p.d) {
+      a += `<path d="${p.d}" fill="${col}" stroke="${col}" stroke-width="${ow * 2}" stroke-linejoin="round"/>`;
+      b += `<path d="${p.d}" fill="${c}"/>`;
+    } else if (p.e) {
+      const [cx, cy, rx, ry, rot = 0] = p.e;
+      const t = `cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" transform="rotate(${rot} ${cx} ${cy})"`;
+      a += `<ellipse ${t} fill="${col}" stroke="${col}" stroke-width="${ow * 2}"/>`;
+      b += `<ellipse ${t} fill="${c}"/>`;
+    }
+  }
+  return `<g ${filt ? 'filter="url(#ink)"' : ''}>${a}${b}</g>`;
+}
+function nail(x, y, rot, s = 1, fill = '#fbfbfb') {
+  return `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s})"><path d="M-9,-6 Q-11,6 0,8 Q11,6 9,-6 Z" fill="${fill}" stroke="${INK}" stroke-width="2.6"/></g>`;
+}
+
+/* ---------- a lanterna na mão (o HUD do jogador) ---------- */
+function torch(o = {}) {
+  const bat = o.bat ?? CTX.bat;
+  const x = o.x ?? 560, y = o.y ?? 930, rot = o.rot ?? -14, s = o.s ?? 1.08;
+  const dim = o.dim ?? 0;                 // 0 = iluminado, 1 = na escuridão total
+  const lerp = (a, b) => {               // mistura de cinzas
+    const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+    const c = k => Math.round(((pa >> k) & 255) * (1 - dim) + ((pb >> k) & 255) * dim);
+    return '#' + ((1 << 24) + (c(16) << 16) + (c(8) << 8) + c(0)).toString(16).slice(1);
+  };
+  const skin = lerp(o.skin || '#f2f2f0', '#3a3a3a');
+  const shade = lerp('#bdbdbd', '#252525');
+  const d1 = lerp('#2e2e2e', '#111111'), d2 = lerp('#454545', '#181818'), d3 = lerp('#5d5d5d', '#1e1e1e');
+  const lineCol = o.redline ? '#5a0d0a' : INK;
+  const caseParts = [
+    { d: 'M-48,140 L48,140 L52,600 L-52,600 Z', c: d1 },
+    { d: 'M-72,92 L72,92 L50,152 L-50,152 Z', c: d1 },
+    { d: 'M-98,0 L98,0 L98,72 A98,36 0 0 1 -98,72 Z', c: d1 },
+  ];
+  const hand = [
+    { d: 'M-6,176 C14,150 70,140 118,160 C178,186 226,244 262,306 L420,600 L420,820 L90,820 C48,620 16,480 -6,400 Z' },
+  ];
+  const fingers = [
+    { l: [[10, 206], [-58, 212]], w: 38 },
+    { l: [[10, 252], [-60, 258]], w: 38 },
+    { l: [[10, 298], [-58, 303]], w: 37 },
+    { l: [[12, 342], [-50, 346]], w: 33 },
+  ];
+  const thumb = [{ l: [[104, 196], [44, 168], [-6, 160]], w: 36 }];
+  let g = '';
+  g += body(caseParts, d1, 4.5, lineCol);
+  g += `<ellipse cx="0" cy="0" rx="98" ry="36" fill="${d2}" stroke="${lineCol}" stroke-width="5" filter="url(#ink)"/>`;
+  g += `<ellipse cx="-6" cy="-3" rx="74" ry="24" fill="${d3}" opacity=".55"/>`;
+  g += `<path d="M-92,14 Q-90,52 -70,70" stroke="${d3}" stroke-width="7" fill="none" opacity=".8"/>`;
+  g += `<path d="M-40,170 L-40,560" stroke="${d3}" stroke-width="9" opacity=".6"/>`;
+  // visor de bateria
+  g += `<g transform="translate(-6 46) rotate(3)"><rect x="-31" y="-15" width="62" height="30" rx="4" fill="${lerp('#161616', '#0a0a0a')}" stroke="${lerp('#777777', '#222222')}" stroke-width="2"/>
+        <text x="0" y="8" text-anchor="middle" font-family="Courier Prime, Courier New, monospace" font-weight="700" font-size="22" fill="${lerp('#e8e8e8', '#5a5a5a')}">${bat}%</text></g>`;
+  g += `<rect x="-14" y="200" width="22" height="46" rx="10" fill="${lerp('#1a1a1a', '#0c0c0c')}" stroke="${d3}" stroke-width="2"/>`;
+  return `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s})">${g}</g>`;
+}
+
+/* ---------- textura de lápis: hachuras finas ---------- */
+function hatch(x0, y0, x1, y1, n, col = '#000', op = .12, vertical = true, len = [20, 70]) {
+  let d = '';
+  for (let i = 0; i < n; i++) {
+    const x = rr(x0, x1), y = rr(y0, y1), L = rr(len[0], len[1]);
+    d += vertical ? `M${f1(x)},${f1(y)}l${f1(rr(-2, 2))},${f1(L)}` : `M${f1(x)},${f1(y)}l${f1(L)},${f1(rr(-3, 3))}`;
+  }
+  return `<path d="${d}" stroke="${col}" stroke-width="1.6" opacity="${op}" fill="none" filter="url(#ink)"/>`;
+}
+function scrib(x0, y0, x1, y1, n, col = '#000', op = .12) { // rabiscos horizontais ondulados (chão)
+  let d = '';
+  for (let i = 0; i < n; i++) {
+    let x = rr(x0, x1), y = rr(y0, y1); const L = rr(60, 260);
+    d += `M${f1(x)},${f1(y)}`;
+    for (let k = 0; k < L; k += 18) d += `q9,${f1(rr(-3, 3))} 18,${f1(rr(-1.5, 1.5))}`;
+  }
+  return `<path d="${d}" stroke="${col}" stroke-width="1.4" opacity="${op}" fill="none"/>`;
+}
+
+/* ---------- grama em rabiscos (como nos quadros da floresta) ---------- */
+function grass(x0, x1, y0, y1, n, col = '#fff', sw = 2, h = [10, 40], op = 1, style = 'blade') {
+  let d = '';
+  for (let i = 0; i < n; i++) {
+    const y = rr(y0, y1), t = (y - y0) / Math.max(1, (y1 - y0));
+    const x = rr(x0, x1), sc = .45 + t * .9, hh = rr(h[0], h[1]) * sc;
+    if (style === 'scribble') {          // "mmm" do chão iluminado
+      d += `M${f1(x)},${f1(y)}`;
+      const k = 2 + Math.floor(rnd() * 3);
+      for (let j = 0; j < k; j++) d += `l${f1(3 * sc)},${f1(-hh * rr(.5, 1))}l${f1(3 * sc)},${f1(hh * rr(.5, 1))}`;
+    } else {
+      d += `M${f1(x)},${f1(y)}l${f1(rr(-6, 6) * sc)},${f1(-hh)}M${f1(x + 3)},${f1(y)}l${f1(rr(-4, 8) * sc)},${f1(-hh * .8)}`;
+    }
+  }
+  return `<path d="${d}" stroke="${col}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="${op}"/>`;
+}
+
+/* ---------- tronco em carvão ---------- */
+function trunk(x1, y1, x2, y2, w1, w2, col = '#bbb', op = 1, extra = '') {
+  const a = Math.atan2(y2 - y1, x2 - x1) + Math.PI / 2;
+  const cx = Math.cos(a), cy = Math.sin(a);
+  const p = [[x1 + cx * w1 / 2, y1 + cy * w1 / 2], [x2 + cx * w2 / 2, y2 + cy * w2 / 2], [x2 - cx * w2 / 2, y2 - cy * w2 / 2], [x1 - cx * w1 / 2, y1 - cy * w1 / 2]].map(q => q.map(f1));
+  let s = poly(p, col, `filter="url(#charcoal)" opacity="${op}" ${extra}`);
+  return s;
+}
+function redBand(x, y, w, rot = 0, op = .9) {
+  return `<path d="M${x - w / 2},${y} q${w / 2},${rr(-6, 6)} ${w},${rr(-4, 4)}" stroke="${RED}" stroke-width="${rr(5, 8)}" fill="none" opacity="${op}" transform="rotate(${rot} ${x} ${y})" filter="url(#ink)"/>`;
+}
+
+/* ---------- névoa, bokeh ---------- */
+function fog(n, y0, y1, op = .25, col = '#9a9a9a', cls = 'drift') {
+  let s = '';
+  for (let i = 0; i < n; i++) s += `<ellipse cx="${f1(rr(-100, 820))}" cy="${f1(rr(y0, y1))}" rx="${f1(rr(180, 380))}" ry="${f1(rr(60, 140))}" fill="${col}" opacity="${f1(op * rr(.5, 1) * 100) / 100}" filter="url(#blur40)" class="${cls}" style="animation-delay:${f1(-rr(0, 20))}s"/>`;
+  return s;
+}
+function bokeh(op = .07) {
+  return `<g opacity="${op}" filter="url(#blur2)"><circle cx="120" cy="1040" r="34" fill="#fff"/><circle cx="102" cy="1120" r="30" fill="#fff"/><circle cx="210" cy="1150" r="22" fill="#fff"/><circle cx="560" cy="1150" r="26" fill="#fff"/></g>`;
+}
+
+/* ---------- papel / bilhete escrito à mão ---------- */
+function paper(cx, cy, w, h, rot, lines, o = {}) {
+  const fs = o.fs || 46, font = o.font || 'Patrick Hand SC, Gochi Hand, cursive';
+  const fill = o.fill || PAPER, tcol = o.tcol || INK, lh = o.lh || fs * 1.05;
+  const j = () => f1(rr(-4, 4));
+  let s = `<g transform="translate(${cx} ${cy}) rotate(${rot})">`;
+  if (o.shadow !== false) s += `<rect x="${-w / 2 + 10}" y="${-h / 2 + 16}" width="${w}" height="${h}" fill="#000" opacity="${o.shadowOp ?? .18}" filter="url(#blur6)"/>`;
+  const pts = [[-w / 2 + +j(), -h / 2 + +j()], [w / 2 + +j(), -h / 2 + +j()], [w / 2 + +j(), h / 2 + +j()], [-w / 2 + +j(), h / 2 + +j()]];
+  s += poly(pts, fill, `stroke="${o.stroke || INK}" stroke-width="${o.sw ?? 4.5}" stroke-linejoin="round" filter="url(#ink)"`);
+  if (o.texture !== false) s += `<g opacity=".5">${hatch(-w / 2 + 6, -h / 2 + 6, w / 2 - 30, h / 2 - 60, 10, '#000', .06, true, [20, 50])}</g>`;
+  if (o.pin) s += `<rect x="-9" y="${-h / 2 - 22}" width="18" height="40" rx="2" fill="#e6e6e6" stroke="${INK}" stroke-width="3" filter="url(#ink)"/><rect x="-4" y="${-h / 2 - 14}" width="8" height="14" fill="#9a9a9a"/>`;
+  const total = lines.length * lh;
+  lines.forEach((ln, i) => {
+    if (!ln) return;
+    const t = typeof ln === 'string' ? { t: ln } : ln;
+    s += `<text x="${t.x ?? 0}" y="${f1(-total / 2 + lh * (i + .78) + (o.dy || 0))}" text-anchor="${t.a || 'middle'}" font-family="${font}" font-size="${t.fs || fs}" fill="${t.c || tcol}" ${t.r ? `transform="rotate(${t.r})"` : ''} ${o.letter ? `letter-spacing="${o.letter}"` : ''}>${t.t}</text>`;
+  });
+  if (o.after) s += o.after;
+  return s + '</g>';
+}
+
+/* ---------- mãos ---------- */
+// mão direita segurando um papel pela borda (polegar na frente)
+function handNote(x, y, rot = 0, s = 1, skin = '#f2f2f0', shade = '#c4c4c4', mirror = false) {
+  const back = [{ d: 'M-6,-40 C40,-70 120,-40 160,10 L330,250 L330,420 L60,420 C40,300 20,120 -6,-40 Z' }, { l: [[100, 96], [40, 74], [0, 60]], w: 34 }];
+  const thumb = [{ l: [[78, 40], [26, 4], [-22, -10]], w: 40 }];
+  let g = body(back, skin);
+  g += `<path d="M90,120 C150,180 220,280 250,420 L330,420 L330,260 C260,170 170,90 90,120 Z" fill="${shade}" opacity=".6"/>`;
+  g += body(thumb, skin);
+  g += nail(-24, -10, 76, 1.2);
+  g += `<path d="M40,26 q14,10 8,22 M20,70 q-12,6 -18,0" stroke="${INK}" stroke-width="3" fill="none"/>` + nail(-6, 58, 80, .9);
+  return `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${mirror ? -s : s} ${s})">${g}</g>`;
+}
+// punho fechado numa maçaneta, braço saindo para a direita
+function handFist(x, y, rot = 0, s = 1, skin = '#f2f2f0', shade = '#bdbdbd', armDir = 1) {
+  const arm = [{ d: `M40,-60 C150,-90 300,-90 520,-110 L520,40 C360,40 210,50 70,70 Z` }];
+  const fist = [{ d: 'M-110,-40 C-110,-110 -20,-120 50,-90 C100,-70 110,30 70,70 C20,110 -90,100 -110,40 Z' }];
+  const fingers = [
+    { l: [[-30, -56], [-104, -40], [-110, -8]], w: 36 },
+    { l: [[-30, -12], [-104, 0], [-108, 30]], w: 36 },
+    { l: [[-30, 30], [-98, 42], [-100, 66]], w: 34 },
+    { l: [[-24, 66], [-84, 80], [-86, 96]], w: 28 },
+  ];
+  let g = body(arm, skin) + body(fist, skin);
+  g += `<path d="M-60,60 C0,96 60,80 80,40 L80,70 C40,110 -40,110 -80,80 Z" fill="${shade}" opacity=".7"/>`;
+  g += `<path d="M120,10 C260,20 380,10 520,0 L520,40 C360,40 210,50 70,70 Z" fill="${shade}" opacity=".6"/>`;
+  g += body(fingers, skin);
+  g += `<path d="M-108,-28 q6,8 0,16 M-104,12 q6,8 0,16 M-98,52 q6,8 0,14" stroke="${INK}" stroke-width="3" fill="none"/>`;
+  g += body([{ l: [[30, -84], [-30, -86], [-74, -74]], w: 34 }], skin);
+  g += nail(-76, -74, 80, 1);
+  return `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s * armDir} ${s})">${g}</g>`;
+}
+// mão aberta espalmada (empurrando), braço descendo para a direita/baixo
+function handPalm(x, y, rot = 0, s = 1, skin = '#f2f2f0', shade = '#bdbdbd', armLen = 700, spread = 1) {
+  const palm = [{ d: `M-70,-30 C-80,40 -50,100 0,110 C60,118 90,70 84,0 C80,-50 50,-80 0,-84 C-40,-84 -66,-60 -70,-30 Z` },
+  { d: `M-40,90 L60,96 L${120 + armLen * .35},${armLen} L${-60 + armLen * .2},${armLen} Z` }];
+  const fing = [
+    { l: [[-58, -40], [-80 - 20 * spread, -140], [-92 - 26 * spread, -210]], w: 34 },
+    { l: [[-24, -70], [-30 - 6 * spread, -190], [-34 - 8 * spread, -270]], w: 36 },
+    { l: [[14, -74], [22, -200], [26 + 4 * spread, -280]], w: 36 },
+    { l: [[48, -60], [68 + 10 * spread, -170], [80 + 14 * spread, -238]], w: 32 },
+    { l: [[70, 20], [130 + 20 * spread, -20], [178 + 26 * spread, -60]], w: 38 },
+  ];
+  let g = body([...palm, ...fing], skin);
+  g += `<path d="M0,110 L${120 + armLen * .35},${armLen} L${40 + armLen * .3},${armLen} L-30,104 Z" fill="${shade}" opacity=".5"/>`;
+  g += `<path d="M-40,-10 q30,24 70,10 M-20,30 q30,14 56,0" stroke="${INK}" stroke-width="3" fill="none" opacity=".6"/>`;
+  g += `<path d="M-84,-140 q8,6 4,14 M-34,-190 q8,6 2,14 M22,-200 q8,4 2,14 M70,-170 q8,4 2,12" stroke="${INK}" stroke-width="2.6" fill="none" opacity=".7"/>`;
+  return `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s})">${g}</g>`;
+}
+
+/* ---------- pernas da criatura alta ---------- */
+function leg(cx, top, bottom, w = 70, mirror = 1, o = {}) {
+  const L = bottom - top, k = top + L * .42, c = top + L * .58, a = top + L * .9;
+  const m = mirror;
+  const X = dx => f1(cx + dx * m);
+  const d = `M${X(-w * .44)},${top} C${X(-w * .46)},${top + L * .2} ${X(-w * .36)},${k - 30} ${X(-w * .3)},${k}
+    C${X(-w * .46)},${k + 40} ${X(-w * .56)},${c} ${X(-w * .46)},${c + L * .1}
+    C${X(-w * .32)},${a - 30} ${X(-w * .16)},${a} ${X(-w * .16)},${a + L * .03}
+    C${X(-w * .26)},${bottom - 6} ${X(-w * .3)},${bottom} ${X(-w * .1)},${bottom}
+    L${X(w * .44)},${bottom} C${X(w * .36)},${bottom - 10} ${X(w * .16)},${bottom - 18} ${X(w * .16)},${a + L * .02}
+    C${X(w * .2)},${a - 40} ${X(w * .44)},${c + 30} ${X(w * .44)},${c}
+    C${X(w * .4)},${k + 40} ${X(w * .3)},${k + 10} ${X(w * .32)},${k}
+    C${X(w * .4)},${k - 50} ${X(w * .44)},${top + L * .2} ${X(w * .44)},${top} Z`;
+  let s = `<path d="${d}" fill="${o.fill || '#eeeeec'}" stroke="${o.stroke || INK}" stroke-width="${o.sw ?? 4}" filter="url(#ink)"/>`;
+  // sombreamento a carvão
+  s += `<path d="${d}" fill="url(#legShade)" opacity=".9"/>`;
+  s += `<g clip-path="none">${hatch(cx - w * .35, top, cx + w * .35, bottom - 30, Math.round(L / 9), '#000', .22, true, [30, 110])}</g>`;
+  // joelho ossudo
+  s += `<path d="M${X(-w * .2)},${k - 18} q${f1(10 * m)},18 ${f1(4 * m)},34 M${X(w * .12)},${k - 10} q${f1(-8 * m)},16 ${f1(-2 * m)},30" stroke="${INK}" stroke-width="5" fill="none" filter="url(#ink)"/>`;
+  s += `<ellipse cx="${X(-w * .05)}" cy="${f1(k + 6)}" rx="${f1(w * .1)}" ry="${f1(w * .16)}" fill="#000" opacity=".55" filter="url(#blur2)"/>`;
+  // dedos do pé
+  if (o.toes !== false) s += `<path d="M${X(-w * .05)},${bottom - 2} l0,-10 M${X(w * .08)},${bottom - 2} l0,-10 M${X(w * .2)},${bottom - 2} l0,-10 M${X(w * .32)},${bottom - 2} l0,-9" stroke="${INK}" stroke-width="2.5"/>`;
+  return s;
+}
+
+/* ---------- buraco de parede ---------- */
+function holeJagged(cx, cy, r, o = {}) {
+  let pts = [];
+  const n = o.n || 16;
+  for (let i = 0; i < n; i++) {
+    const a = i / n * Math.PI * 2, R = r * (i % 2 ? rr(.86, .95) : rr(1, 1.1));
+    pts.push([f1(cx + Math.cos(a) * R * (o.sx || 1)), f1(cy + Math.sin(a) * R)]);
+  }
+  let rim = '';
+  // bordas de reboco quebrado (lascas cinzas)
+  for (let i = 0; i < n; i++) {
+    const p = pts[i], q = pts[(i + 1) % n];
+    const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
+    const ox = (mx - cx) * .18, oy = (my - cy) * .18;
+    rim += poly([p, q, [f1(q[0] + ox), f1(q[1] + oy)], [f1(p[0] + ox * 1.2), f1(p[1] + oy * 1.2)]], i % 3 ? '#8d8d8d' : '#6e6e6e', `stroke="${INK}" stroke-width="2.5"`);
+  }
+  let s = `<g filter="url(#ink)">${rim}${poly(pts, '#050505', `stroke="${INK}" stroke-width="4"`)}</g>`;
+  if (o.redRim) s += `<g opacity=".7">${pts.filter((_, i) => i % 3 === 0).map(p => `<path d="M${p[0]},${p[1]} L${f1(p[0] + (cx - p[0]) * .12)},${f1(p[1] + (cy - p[1]) * .12)}" stroke="#5a0b08" stroke-width="7"/>`).join('')}</g>`;
+  return s;
+}
+
+/* ---------- lâmpada pendurada ---------- */
+function bulb(x, top, len, s = 1) {
+  return `<g filter="url(#ink)"><ellipse cx="${x}" cy="${top}" rx="${30 * s}" ry="${7 * s}" fill="${INK}"/>
+  <path d="M${x},${top} L${x},${top + len}" stroke="${INK}" stroke-width="2.5"/>
+  <path d="M${x - 5 * s},${top + len} l0,${10 * s} l${10 * s},0 l0,${-10 * s} Z" fill="#ddd" stroke="#777" stroke-width="2"/>
+  <path d="M${x - 5 * s},${top + len + 10 * s} C${x - 18 * s},${top + len + 22 * s} ${x - 16 * s},${top + len + 44 * s} ${x},${top + len + 46 * s} C${x + 16 * s},${top + len + 44 * s} ${x + 18 * s},${top + len + 22 * s} ${x + 5 * s},${top + len + 10 * s}" fill="#f8f8f8" stroke="#8a8a8a" stroke-width="2.4"/></g>`;
+}
+
+/* ============================================================
+   DESTINO — cenas (uma função por quadro, na ordem da história)
+   ============================================================ */
+'use strict';
+const ART = {};
+
+/* ---------- 0. tela vermelha ---------- */
+ART.redTitle = () => {
+  seed(1);
+  return bg('url(#redBg)') + `<rect width="${W}" height="${H}" fill="#000" opacity=".25" filter="url(#paperNoise)"/>` + vig(.35);
+};
+
+/* ---------- corredor inicial ---------- */
+function corridorBase(o = {}) {
+  seed(o.seed || 2);
+  const bl = [240, 410], br = [466, 410], bbl = [240, 694], bbr = [466, 694];
+  let s = bg('url(#corrBg)');
+  s += poly([[0, -20], bl, bbl, [0, 1066]], '#000', 'opacity=".10"');
+  s += poly([[720, 60], br, bbr, [720, 1132]], '#000', 'opacity=".08"');
+  s += poly([[0, 1066], bbl, bbr, [720, 1132], [720, 1300], [0, 1300]], '#000', 'opacity=".05"');
+  s += poly([bl, br, bbr, bbl], '#fff', 'opacity=".55"');
+  s += hatch(20, 300, 120, 980, 26, '#000', .18) + hatch(600, 300, 700, 1000, 26, '#000', .16);
+  s += hatch(244, 590, 262, 690, 12, '#000', .25, true, [10, 30]) + hatch(446, 600, 462, 690, 12, '#000', .25, true, [10, 30]);
+  s += scrib(80, 760, 640, 1260, 22, '#000', .14);
+  s += `<g class="lampGlow"><ellipse cx="360" cy="330" rx="300" ry="240" fill="#fff" opacity=".55" filter="url(#blur40)"/></g>`;
+  s += ink([[-4, -10], bl], 8) + ink([[724, 70], br], 8) + ink([bbl, [-4, 1070]], 8) + ink([bbr, [724, 1136]], 8);
+  s += ink([bl, br, bbr, bbl, bl], 7);
+  // luminária de teto
+  s += `<g filter="url(#ink)"><path d="M348,322 l24,0 M360,322 l0,10" stroke="${INK}" stroke-width="5"/><ellipse cx="360" cy="344" rx="9" ry="12" fill="#fafafa" stroke="${INK}" stroke-width="4"/><ellipse cx="360" cy="344" rx="3" ry="5" fill="${INK}"/></g>`;
+  // pingo de tinta no chão
+  s += `<ellipse cx="398" cy="716" rx="7" ry="3" fill="${RED}" filter="url(#ink)"/>`;
+  return s;
+}
+ART.corridor = () => {
+  let s = corridorBase();
+  s += `<g class="pulse">` + inkD('M306,562 C292,558 278,560 258,562 M270,552 L256,562 L270,570', 4, RED) + inkD('M378,564 C394,560 410,560 430,556 M418,548 L431,556 L418,566', 4, RED) + `</g>`;
+  return s + vig(.55);
+};
+
+/* ---------- corredor do vermelho (direita) ---------- */
+ART.corridorRed = () => {
+  seed(3);
+  let s = bg('#e9e9e9');
+  const vp = [362, 600];
+  s += `<rect width="${W}" height="${H}" fill="url(#tunnel)"/>`;
+  s += poly([[600, -20], [640, -20], [640, 1215], [606, 1222]], '#fafafa');
+  s += poly([[640, -20], [740, -20], [740, 1300], [640, 1215]], '#fdfdfd');
+  s += hatch(0, 100, 300, 1100, 50, '#000', .12);
+  s += hatch(380, 100, 600, 1100, 40, '#000', .1);
+  s += ink([[110, -20], [330, 555]], 6) + ink([[612, -20], [400, 560]], 6) + ink([[0, 1205], [326, 650]], 6) + ink([[606, 1220], [400, 648]], 6);
+  s += ink([[640, -20], [640, 1215]], 6) + ink([[606, 1220], [720, 1215]], 6);
+  // fundo do corredor
+  s += rect(334, 556, 64, 92, '#0a0a0a', 'filter="url(#blur6)"');
+  s += `<g filter="url(#ink)" opacity=".95">
+    <path d="M232,412 C250,394 330,386 422,392 C470,396 482,420 482,520 C484,640 474,750 470,792 C440,812 300,812 230,800 C222,690 222,520 232,412 Z" fill="none" stroke="${RED}" stroke-width="7"/>
+    <path d="M290,480 C330,470 400,470 438,482 C442,560 440,660 436,706 C390,716 320,716 292,710 C286,640 284,540 290,480 Z" fill="none" stroke="${RED}" stroke-width="5"/>
+    <path d="M320,540 C350,534 384,534 414,540 C416,590 416,640 412,676 C380,680 350,680 322,676 C318,630 318,580 320,540 Z" fill="none" stroke="${RED}" stroke-width="4" opacity=".8"/>
+    <path d="M230,800 C230,880 280,900 340,940 C390,972 420,980 450,1000" fill="none" stroke="${RED}" stroke-width="12"/>
+    <path d="M250,860 C300,900 360,940 440,990" fill="none" stroke="${RED}" stroke-width="6" opacity=".7"/>
+  </g>`;
+  s += `<g opacity=".9">${[...Array(14)].map(() => `<circle cx="${f1(rr(260, 500))}" cy="${f1(rr(880, 1010))}" r="${f1(rr(1.5, 4))}" fill="${RED}"/>`).join('')}</g>`;
+  // seta pintada na parede
+  s += inkD('M10,560 l22,30 l-22,34 M2,592 l30,0', 9, RED);
+  // balde de tinta
+  s += `<g filter="url(#ink)" transform="translate(156 980)">
+    <path d="M-36,-30 L-30,40 C-20,52 20,52 30,40 L36,-30 Z" fill="#cfcfcf" stroke="${INK}" stroke-width="4"/>
+    <ellipse cx="0" cy="-30" rx="36" ry="12" fill="#7c0b07" stroke="${INK}" stroke-width="4"/>
+    <path d="M-30,-26 C-26,-4 -24,6 -20,14 M14,-20 L16,4" stroke="${RED}" stroke-width="6" fill="none"/>
+    <path d="M-36,-30 C-34,-70 34,-70 36,-30" fill="none" stroke="${INK}" stroke-width="3"/>
+    <ellipse cx="0" cy="56" rx="44" ry="8" fill="#000" opacity=".25"/></g>`;
+  s += `<ellipse cx="190" cy="1240" rx="12" ry="4" fill="${RED}"/>`;
+  return s + vig(.7);
+};
+
+/* ---------- seguindo o vermelho no escuro ---------- */
+ART.redWalk1 = () => {
+  seed(4);
+  let s = bg('#2a2a2a') + `<rect width="${W}" height="${H}" fill="url(#tunnelDark)"/>`;
+  s += `<g class="push">`;
+  s += ink([[-20, 0], [300, 520]], 5, '#111') + ink([[740, 0], [430, 520]], 5, '#111') + ink([[-20, 1290], [300, 760]], 5, '#111') + ink([[740, 1290], [430, 760]], 5, '#111');
+  s += poly([[110, 340], [180, 420], [180, 980], [110, 1100]], '#1a1a1a', `stroke="${INK}" stroke-width="5" filter="url(#ink)"`);
+  s += `<g filter="url(#ink)"><path d="M30,120 C60,60 560,40 700,110 C720,300 712,700 690,1000 M560,980 C640,860 650,600 640,420" fill="none" stroke="${RED}" stroke-width="18"/>
+    <path d="M520,520 C600,520 620,560 610,700 C604,780 600,820 590,850" fill="none" stroke="${RED}" stroke-width="8" opacity=".6"/></g>`;
+  s += rect(330, 560, 70, 110, '#000', 'filter="url(#blur18)"');
+  s += `</g>` + vig(1);
+  return s;
+};
+ART.redWalk2 = () => {
+  seed(5);
+  let s = bg('#111') + `<rect width="${W}" height="${H}" fill="url(#tunnelDark)" opacity=".5"/>`;
+  s += `<g class="push">`;
+  s += ink([[-20, 0], [300, 520]], 4, '#2a2a2a') + ink([[740, 0], [430, 520]], 4, '#2a2a2a') + ink([[-20, 1290], [300, 760]], 4, '#2a2a2a') + ink([[740, 1290], [430, 760]], 4, '#2a2a2a');
+  s += `<g filter="url(#blur2)" opacity=".55"><path d="M90,460 C90,400 330,380 440,400 C470,520 470,760 450,980 C330,1000 150,1000 90,980 C70,800 80,600 90,460" fill="none" stroke="#6a0f0b" stroke-width="20"/>
+    <path d="M70,1060 C120,1140 200,1200 260,1240" fill="none" stroke="#6a0f0b" stroke-width="14"/></g>`;
+  s += `<g opacity=".6">${[...Array(8)].map(() => `<circle cx="${f1(rr(160, 300))}" cy="${f1(rr(1080, 1180))}" r="${f1(rr(2, 4))}" fill="#7a0f0b"/>`).join('')}</g>`;
+  s += `</g>` + vig(1) + dark(.25);
+  return s;
+};
+ART.black = () => bg('#000');
+ART.spark = () => bg('#000') + `<g class="sparkGrow"><ellipse cx="360" cy="800" rx="16" ry="4" fill="#fff" filter="url(#blur2)"/><ellipse cx="360" cy="800" rx="60" ry="20" fill="#fff" opacity=".12" filter="url(#blur18)"/></g>`;
+
+/* ---------- porta com luz por baixo ---------- */
+ART.doorDark = () => {
+  seed(6);
+  let s = bg('#151515');
+  s += poly([[0, 0], [720, 0], [630, 128], [105, 128]], '#0d0d0d') + poly([[0, 0], [105, 128], [105, 990], [0, 1100]], '#101010') + poly([[720, 0], [630, 128], [630, 990], [720, 1100]], '#0f0f0f');
+  s += rect(105, 128, 525, 862, '#2b2b2b');
+  s += rect(176, 252, 396, 738, '#262626', `stroke="#0a0a0a" stroke-width="4" filter="url(#ink)"`);
+  s += ink([[0, 0], [105, 128], [630, 128], [720, 0]], 4, '#050505') + ink([[105, 128], [105, 990], [0, 1100]], 4, '#050505') + ink([[630, 128], [630, 990], [720, 1100]], 4, '#050505');
+  // chão iluminado pela fresta
+  s += `<ellipse cx="380" cy="1080" rx="380" ry="190" fill="#9a9a9a" opacity=".55" filter="url(#blur40)" class="breath"/>`;
+  s += `<rect x="186" y="986" width="380" height="7" fill="#fff" filter="url(#glowW)" class="flick"/>`;
+  // espelho da fechadura brilhando
+  s += `<ellipse cx="230" cy="700" rx="70" ry="90" fill="#cfcfcf" opacity=".35" filter="url(#blur18)"/>`;
+  s += `<g filter="url(#ink)"><rect x="212" y="660" width="38" height="78" rx="6" fill="#4a4a4a" stroke="#0a0a0a" stroke-width="4"/><circle cx="231" cy="684" r="10" fill="none" stroke="#0a0a0a" stroke-width="3.5"/><rect x="229" y="702" width="4" height="16" fill="#ddd"/></g>`;
+  // bilhete no chão
+  s += `<g transform="translate(482 1086) rotate(18) skewX(-30) scale(1 .55)"><rect x="-56" y="-44" width="112" height="88" fill="#bcbcbc" stroke="#444" stroke-width="3" filter="url(#ink)"/>
+    <text x="0" y="-12" font-family="Patrick Hand SC, cursive" font-size="22" text-anchor="middle" fill="#333">NÃO OLHE</text><text x="0" y="16" font-family="Patrick Hand SC, cursive" font-size="22" text-anchor="middle" fill="#333">PARA TRÁS</text></g>`;
+  return s + vig(.9);
+};
+
+/* ---------- "não olhe para trás" ---------- */
+ART.noteNaoOlhe = () => {
+  seed(7);
+  let s = bg('#262626') + rect(0, 0, 78, H, '#1b1b1b') + ink([[78, -10], [78, 1290]], 5, '#0c0c0c');
+  s += `<ellipse cx="200" cy="900" rx="230" ry="260" fill="#9b9b9b" opacity=".38" filter="url(#blur40)" class="breath"/>`;
+  s += `<g filter="url(#ink)"><rect x="168" y="780" width="110" height="240" rx="10" fill="#5e5e5e" stroke="#0d0d0d" stroke-width="6"/>
+    <circle cx="223" cy="846" r="34" fill="none" stroke="#0d0d0d" stroke-width="5"/>
+    <path d="M223,922 m-11,0 a11,11 0 1 1 22,0 l-5,4 l3,34 l-18,0 l3,-34 Z" fill="#f2f2f2" stroke="#0d0d0d" stroke-width="3"/></g>`;
+  s += paper(470, 790, 330, 400, 4, [{ t: 'NÃO', x: -60 }, { t: 'OLHE', x: 10 }, { t: 'PARA', x: -40 }, { t: 'TRÁS', x: -30 }], { fs: 66, fill: '#9d9d9d', tcol: '#151515', lh: 78, shadowOp: .3 });
+  return s + vig(.8);
+};
+
+/* ---------- mão na maçaneta ---------- */
+ART.knobHand = () => {
+  seed(8);
+  let s = bg('#6a6a6a') + `<rect width="${W}" height="${H}" fill="url(#vigSoft)"/>`;
+  s += `<g filter="url(#ink)"><rect x="216" y="420" width="330" height="700" rx="14" fill="#7b7b7b" stroke="${INK}" stroke-width="8"/>
+    ${[[244, 452], [518, 452], [244, 1088], [518, 1088]].map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="9" fill="none" stroke="${INK}" stroke-width="5"/>`).join('')}</g>`;
+  s += `<g class="flick"><path d="M380,860 m-24,0 a24,24 0 1 1 48,0 l-10,10 l8,70 l-44,0 l8,-70 Z" fill="#fff" filter="url(#glowW)"/></g>`;
+  s += `<circle cx="384" cy="700" r="80" fill="#5d5d5d" stroke="${INK}" stroke-width="6" filter="url(#ink)"/>`;
+  s += `<path d="M384,690 l60,-10" stroke="#141414" stroke-width="10" stroke-linecap="round"/>`;
+  return s + vig(.5);
+};
+
+/* ---------- empurrando a porta (luz entrando) ---------- */
+ART.pushPlate = () => {
+  seed(9);
+  let s = bg('#8a8a8a') + `<rect width="${W}" height="${H}" fill="url(#doorLight)"/>`;
+  s += `<g class="doorGap"><rect x="0" y="0" width="140" height="${H}" fill="#fff"/><rect x="100" y="0" width="80" height="${H}" fill="#fff" filter="url(#blur18)"/></g>`;
+  s += ink([[140, -10], [140, 1290]], 4, '#555');
+  s += `<g filter="url(#ink)"><rect x="290" y="790" width="120" height="340" rx="8" fill="#f1f1f1" stroke="${INK}" stroke-width="6"/><circle cx="350" cy="820" r="6" fill="${INK}"/><circle cx="350" cy="1100" r="6" fill="${INK}"/><rect x="345" y="980" width="8" height="34" fill="${INK}"/></g>`;
+  return s + vig(.3);
+};
+ART.white = () => bg('#fff');
+
+/* ---------- sala branca com dois buracos ---------- */
+function roomHolesBase(withDebris = true) {
+  seed(10);
+  const a = [137, 371], b = [595, 371], c = [595, 909], d = [137, 909];
+  let s = bg('#fbfbfb');
+  s += poly([[0, 120], a, d, [0, 1150]], '#ececec') + poly([[720, 240], b, c, [720, 1080]], '#e8e8e8');
+  s += poly([[0, 120], [720, 240], b, a], '#f5f5f5');
+  s += `<rect x="0" y="1000" width="${W}" height="280" fill="url(#floorFade)"/>`;
+  s += hatch(140, 380, 160, 900, 10, '#000', .12) + hatch(574, 380, 594, 900, 10, '#000', .12);
+  s += ink([[-4, 118], a], 5) + ink([[724, 238], b], 5) + ink([d, [-4, 1152]], 5) + ink([c, [724, 1082]], 5) + ink([a, b, c, d, a], 5);
+  s += bulb(360, 170, 120, 1.15);
+  s += `<g filter="url(#ink)"><circle cx="290" cy="722" r="33" fill="#0c0c0c"/><circle cx="452" cy="722" r="33" fill="#0c0c0c"/>
+    <path d="M262,708 l-6,-4 M318,706 l6,-5 M276,750 l-4,6" stroke="#0c0c0c" stroke-width="3"/>
+    <path d="M430,752 c8,6 30,6 40,0" stroke="#555" stroke-width="3" fill="none"/>
+    <path d="M286,680 l0,-8 M290,668 l0,-3" stroke="#222" stroke-width="2.5"/><path d="M442,672 q10,-6 20,0" stroke="#222" stroke-width="2.5" fill="none"/>
+    <rect x="356" y="626" width="32" height="42" fill="#fff" stroke="${INK}" stroke-width="3"/><rect x="367" y="618" width="10" height="14" fill="#ccc" stroke="${INK}" stroke-width="2"/>
+    <path d="M362,640 h20 M362,648 h20 M362,656 h18" stroke="#333" stroke-width="2"/></g>`;
+  if (withDebris) {
+    let deb = '';
+    for (let i = 0; i < 26; i++) {
+      const x = rr(180, 410), y = rr(935, 985), r0 = rr(3, 9);
+      deb += `<polygon points="${f1(x - r0)},${f1(y + r0 * .5)} ${f1(x)},${f1(y - r0)} ${f1(x + r0)},${f1(y + r0 * .4)}" fill="${rnd() < .5 ? '#bdbdbd' : '#e2e2e2'}" stroke="#555" stroke-width="1.5"/>`;
+    }
+    deb += `<polygon points="296,972 318,962 330,976 300,982" fill="#cfcfcf" stroke="#555" stroke-width="1.5"/>`;
+    s += `<g filter="url(#ink)">${deb}</g>`;
+  }
+  return s;
+}
+ART.roomHoles = () => roomHolesBase() + vig(.18);
+
+/* ---------- bilhete da regra número 1 ---------- */
+ART.noteRule = () => {
+  seed(11);
+  let s = bg('#f7f7f7');
+  s += paper(362, 760, 520, 600, 0, [
+    'VOCÊ FEZ A ESCOLHA', 'CERTA NÃO OLHANDO', 'PARA TRÁS', '',
+    'REGRA NÚMERO 1:', 'SE VOCÊ OLHAR PARA', 'ELE VOCÊ MORRE.', '',
+    'EU MESMO JÁ MORRI', 'ALGUMAS VEZES.'], { fs: 40, lh: 48, pin: true, shadowOp: .22, dy: 6,
+    after: `<path d="M210,250 l8,-30 l6,26 l6,-28 l6,24 l6,-20 l6,18" stroke="${INK}" stroke-width="3" fill="none"/><path d="M-230,190 l-6,50 M-224,200 l-4,40" stroke="${INK}" stroke-width="3"/><path d="M200,-20 l-14,18 M210,60 l-20,14" stroke="${INK}" stroke-width="2.5"/>` });
+  s += `<path d="M262,560 q60,-10 120,4" stroke="#aaa" stroke-width="14" opacity=".35" fill="none" filter="url(#blur6)"/>`;
+  return s + vig(.12);
+};
+
+/* ---------- os dois buracos de perto ---------- */
+ART.holeChave = () => {
+  seed(12);
+  let s = bg('#fbfbfb') + `<rect y="900" width="${W}" height="380" fill="url(#floorFade)"/>`;
+  s += ink([[-10, 160], [10, 340], [40, 380], [-10, 380]], 6);
+  s += `<g filter="url(#ink)"><ellipse cx="358" cy="930" rx="162" ry="200" fill="#9b9b9b"/>
+    <ellipse cx="350" cy="926" rx="150" ry="190" fill="#060606"/>
+    <path d="M380,760 C470,790 500,900 470,1060 C450,1100 420,1110 400,1110 C440,1030 450,880 380,760 Z" fill="#cfcfcf"/>
+    ${hatch(400, 780, 500, 1100, 50, '#000', .5, true, [6, 18])}
+    <path d="M200,840 C150,900 160,1040 230,1100" fill="none" stroke="#999" stroke-width="10" opacity=".6"/></g>`;
+  s += `<text x="230" y="470" font-family="Patrick Hand SC, cursive" font-size="104" fill="${INK}" letter-spacing="6" filter="url(#ink)">CHAVE</text>`;
+  s += inkD('M520,500 C522,560 520,620 516,660 M500,632 l16,30 l14,-32', 6);
+  return s;
+};
+ART.holeQ = () => {
+  seed(13);
+  let s = bg('#fbfbfb') + `<rect y="900" width="${W}" height="380" fill="url(#floorFade)"/>`;
+  s += ink([[620, -10], [650, 100], [720, 120]], 6) + `<polygon points="640,0 720,0 720,110 660,100" fill="#111"/>`;
+  s += holeJagged(380, 990, 170, { n: 20, sx: .9 });
+  s += `<text x="270" y="760" font-family="Patrick Hand SC, cursive" font-size="160" fill="${INK}" filter="url(#ink)">?</text>`;
+  s += inkD('M300,770 C280,800 284,840 310,870 M286,852 l26,22 l4,-32', 6);
+  s += inkD('M430,640 l6,40 l10,-34 l8,38 l8,-36', 3);
+  return s;
+};
+
+/* ---------- mão entrando no buraco ---------- */
+ART.handToHole = () => {
+  seed(14);
+  let s = bg('#fbfbfb') + `<rect y="900" width="${W}" height="380" fill="url(#floorFade)"/>`;
+  s += `<g class="pushSlow">` + holeJagged(460, 900, 210, { n: 18, redRim: true });
+  s += `</g>`;
+  s += `<text x="290" y="290" font-family="Patrick Hand SC, cursive" font-size="130" fill="${INK}" filter="url(#ink)">?</text>`;
+  s += inkD('M318,300 C300,340 304,380 332,400 M306,384 l28,18 l2,-32', 5);
+  return s;
+};
+ART.armIn = () => {
+  seed(15);
+  let s = bg('#f6f6f6');
+  s += `<g class="zoomHole">` + holeJagged(400, 640, 300, { n: 20, redRim: true });
+  s += `</g>`;
+  return s;
+};
+ART.holeClose = () => {
+  seed(16);
+  let s = bg('#e8e8e8') + `<rect y="800" width="${W}" height="480" fill="url(#floorFade)"/>`;
+  let pts = []; for (let i = 0; i <= 14; i++) pts.push([f1(-40 + i * 57), f1(i % 2 ? rr(150, 190) : rr(90, 130))]);
+  s += `<g filter="url(#ink)"><path d="M-40,1300 L-40,${pts[0][1]} ${pts.map(p => 'L' + p.join(',')).join(' ')} L760,1300 Z" fill="#050505"/>
+    ${pts.slice(0, -1).map((p, i) => `<polygon points="${p.join(',')} ${pts[i + 1].join(',')} ${pts[i + 1][0]},${pts[i + 1][1] - 30} ${p[0]},${p[1] - 26}" fill="${i % 2 ? '#8a8a8a' : '#6d6d6d'}" stroke="${INK}" stroke-width="3"/>`).join('')}</g>`;
+  s += `<ellipse cx="360" cy="1180" rx="520" ry="220" fill="#d8d8d8" filter="url(#blur40)" opacity=".9"/>`;
+  return s;
+};
+
+/* ---------- bilhete que sai do buraco ---------- */
+ART.noteFromHole = () => {
+  seed(17);
+  let s = bg('#fbfbfb');
+  s += paper(660, 260, 130, 190, 4, ['vocÊ fez a', 'certa não', 'para trás'], { fs: 16, lh: 22, shadowOp: .1 });
+  s += holeJagged(210, 640, 120, { n: 16, redRim: true });
+  s += paper(320, 690, 260, 290, -6, ['o desconhecido', 'pode ser', 'assustador,', '', 'leve isto...'], { fs: 30, lh: 38, font: 'Courier Prime, Courier New, monospace', tcol: '#111' });
+  return s + vig(.12);
+};
+
+/* ---------- a mão de garras entrega a lanterna ---------- */
+ART.creepyHand = () => {
+  seed(18);
+  let s = bg('#fbfbfb');
+  s += `<polygon points="690,40 720,20 720,110 676,112" fill="#111"/>`;
+  s += holeJagged(580, 380, 112, { n: 16, redRim: true });
+  s += `<rect x="470" y="560" width="140" height="460" fill="#000" opacity=".1" filter="url(#blur18)"/>`;
+  // lanterna de cabeça para baixo, presa por garras que saem do escuro do buraco
+  s += `<g filter="url(#ink)"><rect x="548" y="430" width="58" height="250" rx="16" fill="#2c2c2c" stroke="${INK}" stroke-width="4"/>
+    <path d="M544,678 L610,678 L626,708 L528,708 Z" fill="#2c2c2c" stroke="${INK}" stroke-width="4"/>
+    <path d="M516,708 L638,708 L638,746 A61,19 0 0 1 516,746 Z" fill="#262626" stroke="${INK}" stroke-width="4"/>
+    <path d="M560,470 L560,660" stroke="#555" stroke-width="6" opacity=".7"/></g>`;
+  s += `<g filter="url(#ink)">${[[540, 420, 520, 470, 536, 540], [560, 440, 540, 500, 552, 590], [612, 440, 628, 500, 612, 590], [626, 420, 646, 470, 628, 540]].map(([x0, y0, x1, y1, x2, y2]) => `<path d="M${x0},${y0} Q${x1},${y1} ${x2},${y2}" stroke="#0b0b0b" stroke-width="9" fill="none" stroke-linecap="round"/><path d="M${x2},${y2} q${x2 > 580 ? -8 : 8},18 ${x2 > 580 ? -14 : 14},22" stroke="#0b0b0b" stroke-width="5" fill="none" stroke-linecap="round"/>`).join('')}</g>`;
+  // mão do jogador com o bilhete amassado
+  s += paper(170, 1150, 300, 170, -14, ['o desconhecido', 'pode ser', 'assustador'], { fs: 28, lh: 30, font: 'Courier Prime, monospace', after: `<path d="M-120,-40 l60,20 l40,-30 l50,40 l60,-20 M-100,40 l60,-20 l70,30" stroke="#999" stroke-width="2" fill="none"/>` });
+  return s + vig(.1);
+};
+
+/* ---------- "Parabéns, você possui uma lanterna" ---------- */
+ART.gotTorch = () => {
+  seed(19);
+  let s = bg('#fdfcfc');
+  s += paper(650, 400, 170, 210, 3, ['você fez a escolha', 'certa não olhando', 'para trás', '', 'regra número 1:', 'se você olhar para', 'ele você morre.'], { fs: 14, lh: 19, pin: true, shadowOp: .1 });
+  s += holeJagged(300, 640, 92, { n: 14, redRim: true });
+  s += `<rect x="200" y="540" width="200" height="200" fill="url(#holeShade)"/>`;
+  s += torch({ x: 280, y: 860, rot: -20, s: 1.7 });
+  return s;
+};
+
+/* ---------- "Os buracos se fecharam." ---------- */
+ART.holesClosed = () => {
+  seed(20);
+  let s = bg('#fbfbfb') + `<rect y="1000" width="${W}" height="280" fill="url(#floorFade)"/>`;
+  s += paper(372, 540, 140, 170, 0, ['você fez a escolha', 'certa não olhando', 'para trás', '', 'regra número 1:', 'se você olhar para', 'ele você morre.'], { fs: 11, lh: 15, pin: true, shadowOp: .12 });
+  // remendo rachado
+  let cr = '';
+  for (let i = 0; i < 22; i++) { const a = rr(0, 6.28), d0 = rr(0, 70); const x = 190 + Math.cos(a) * d0, y = 700 + Math.sin(a) * d0 * .9; cr += `M${f1(x)},${f1(y)} l${f1(rr(-30, 30))},${f1(rr(-30, 30))} l${f1(rr(-25, 25))},${f1(rr(-25, 25))}`; }
+  s += `<path d="${cr}" stroke="${INK}" stroke-width="2.4" fill="none" filter="url(#ink)"/>`;
+  s += `<path d="M120,640 C150,600 250,610 270,660 C280,720 260,780 200,790 C140,790 110,720 120,640 Z" fill="none" stroke="${INK}" stroke-width="2.5" filter="url(#ink)"/>`;
+  s += `<text x="150" y="590" font-family="Patrick Hand SC, cursive" font-size="40" fill="#aaa">?</text>`;
+  // remendo de cimento
+  s += `<circle cx="566" cy="720" r="72" fill="#9c9c9c" filter="url(#chalk)"/><circle cx="566" cy="720" r="40" fill="#7a7a7a" opacity=".4" filter="url(#blur18)"/>`;
+  s += `<text x="520" y="616" font-family="Patrick Hand SC, cursive" font-size="28" fill="${INK}">CHAVE</text>` + inkD('M612,622 l0,26 M604,640 l8,10 l7,-10', 2.5);
+  s += torch();
+  return s;
+};
+
+/* ---------- virando-se na sala (panorâmica) ---------- */
+ART.turnPan = () => {
+  seed(21);
+  let s = bg('#fbfbfb') + `<g class="panLeft">`;
+  // duas quinas que passam pelo quadro
+  for (const cx of [700, 1500]) {
+    s += poly([[cx - 900, 0], [cx, 0], [cx, 1000], [cx - 900, 1000]], '#ececec');
+    s += poly([[cx, 0], [cx + 400, 0], [cx + 400, 1000], [cx, 1000]], '#f9f9f9');
+    s += ink([[cx, -10], [cx, 1000]], 4) + ink([[cx - 900, 1000], [cx, 1000], [cx + 400, 1010]], 4);
+    s += hatch(cx - 30, 0, cx, 1000, 20, '#000', .18);
+  }
+  s += `</g>` + `<rect y="1000" width="${W}" height="280" fill="url(#floorFade)"/>`;
+  s += torch({ x: 600 });
+  return s;
+};
+
+/* ---------- sala com a porta cinza ---------- */
+function roomDoorBase() {
+  seed(22);
+  const a = [48, 430], b = [600, 430], c = [600, 897], d = [48, 897];
+  let s = bg('#fbfbfb');
+  s += poly([[0, 380], a, d, [0, 950]], '#e9e9e9') + poly([[720, 330], b, c, [720, 1010]], '#e3e3e3');
+  s += `<rect y="1000" width="${W}" height="280" fill="url(#floorFade)"/>`;
+  s += hatch(48, 440, 70, 890, 12, '#000', .18) + hatch(578, 440, 598, 890, 12, '#000', .18) + hatch(610, 380, 700, 980, 20, '#000', .1);
+  s += ink([[-4, 376], a], 5) + ink([[724, 326], b], 5) + ink([d, [-4, 952]], 5) + ink([c, [724, 1012]], 5) + ink([a, b, c, d, a], 5);
+  s += bulb(355, 195, 52, 1);
+  s += `<g class="doorKnock">` + rect(233, 531, 216, 366, '#8c8c8c', `stroke="${INK}" stroke-width="5" filter="url(#ink)"`);
+  s += `<g filter="url(#ink)"><rect x="412" y="738" width="22" height="42" rx="3" fill="#e6e6e6" stroke="${INK}" stroke-width="3"/><circle cx="423" cy="751" r="6" fill="none" stroke="${INK}" stroke-width="2.5"/><rect x="421" y="762" width="4" height="10" fill="${INK}"/></g></g>`;
+  return s;
+}
+ART.roomDoor = () => roomDoorBase() + torch();
+ART.roomDoorKnock = () => {
+  let s = roomDoorBase();
+  s += `<g class="knockText"><text x="480" y="600" font-family="Patrick Hand SC, cursive" font-size="44" fill="${INK}">Toc</text><text x="486" y="660" font-family="Patrick Hand SC, cursive" font-size="44" fill="${INK}">Toc</text>
+    ${inkD('M452,592 l-10,-8 M452,612 l-12,0 M452,632 l-10,8', 3)}</g>`;
+  return s + torch();
+};
+
+/* ---------- abrindo a porta ---------- */
+ART.doorHandTorch = () => {
+  seed(23);
+  let s = bg('#fbfbfb');
+  s += `<g class="doorSwing">` + rect(-20, -20, 660, 1320, '#9a9a9a') + hatch(0, 0, 640, 1280, 40, '#000', .08) + ink([[640, -10], [640, 1290]], 4);
+  s += `<g filter="url(#ink)"><rect x="530" y="860" width="96" height="190" rx="6" fill="#efefef" stroke="${INK}" stroke-width="5"/><circle cx="578" cy="880" r="5" fill="${INK}"/><circle cx="578" cy="1030" r="5" fill="${INK}"/><path d="M578,990 m-8,0 a8,8 0 1 1 16,0 l-3,3 l3,22 l-16,0 l3,-22 Z" fill="${INK}"/></g>`;
+  s += `<circle cx="570" cy="930" r="40" fill="#cfcfcf" stroke="${INK}" stroke-width="5" filter="url(#ink)"/>`;
+  s += `</g>` + `<rect x="640" y="0" width="80" height="${H}" fill="#000" class="gapOpen" opacity="0"/>`;
+  s += torch({ x: 760, y: 1000, rot: -10 });
+  s += '';
+  return s;
+};
+
+/* ---------- as pernas na floresta, vistas pela porta ---------- */
+ART.legsDoor = () => {
+  seed(24);
+  let s = bg('#fbfbfb');
+  // abertura da porta
+  s += `<clipPath id="doorClip"><rect x="120" y="128" width="488" height="1072"/></clipPath><g clip-path="url(#doorClip)">` + rect(120, 128, 488, 1072, '#060606');
+  s += trunk(150, 128, 150, 1000, 60, 60, '#3a3a3a', .9) + trunk(560, 128, 560, 1000, 50, 50, '#3a3a3a', .9) + trunk(200, 128, 210, 900, 20, 20, '#2a2a2a', .7);
+  s += `<rect x="120" y="800" width="488" height="400" fill="#1d1d1d"/>`;
+  s += grass(120, 608, 790, 1200, 700, '#cfcfcf', 1.6, [16, 46], .85) + grass(120, 608, 830, 1200, 500, '#111', 2, [10, 30], .9);
+  s += leg(300, 100, 1020, 92, 1) + leg(440, 100, 1020, 92, -1);
+  s += grass(240, 520, 990, 1060, 160, '#e4e4e4', 1.8, [14, 36], .9) + grass(240, 520, 1000, 1070, 90, '#0b0b0b', 2, [10, 22], 1);
+  s += `</g>`;
+  // batente e folha da porta aberta
+  s += ink([[120, 128], [608, 128], [608, 1200], [120, 1200], [120, 128]], 9) + ink([[96, 104], [632, 104], [632, 1210]], 4);
+  s += poly([[0, 70], [120, 128], [120, 1200], [0, 1280]], '#cfcfcf', `stroke="${INK}" stroke-width="5" filter="url(#ink)"`);
+  s += hatch(0, 120, 110, 1220, 26, '#000', .2);
+  s += `<rect y="1210" width="${W}" height="70" fill="url(#floorFade)"/>`;
+  return s;
+};
+
+/* ---------- olhando para cima, pelas pernas ---------- */
+ART.legsUp = () => {
+  seed(25);
+  let s = bg('#000') + `<g class="tiltUp">`;
+  s += trunk(40, -1200, 40, 1280, 50, 60, '#2a2a2a', .8) + trunk(690, -1200, 690, 1280, 50, 60, '#2a2a2a', .8);
+  s += `<rect x="0" y="960" width="${W}" height="320" fill="#151515"/>` + grass(0, 720, 940, 1290, 900, '#bdbdbd', 1.8, [20, 60], .9) + grass(0, 720, 980, 1290, 600, '#080808', 2.2, [14, 40]);
+  s += leg(250, -1300, 1100, 210, 1, { toes: false }) + leg(520, -1300, 1100, 200, -1, { toes: false });
+  s += grass(80, 680, 1060, 1290, 300, '#d8d8d8', 2, [24, 60], .9);
+  s += `<rect x="-20" y="-1320" width="760" height="1500" fill="url(#upDark)"/>`;
+  s += `</g>` + `<rect width="${W}" height="${H}" fill="#000" opacity=".55" class="dimIn"/>`;
+  return s + vig(.8);
+};
+
+/* ---------- papel caindo ---------- */
+ART.paperFall = () => {
+  seed(26);
+  let s = bg('#000');
+  s += `<g opacity=".7">` + leg(260, -600, 1500, 190, 1, { toes: false }) + leg(500, -600, 1500, 180, -1, { toes: false }) + `</g>`;
+  s += `<rect width="${W}" height="${H}" fill="url(#upDark)" opacity=".9"/>` + vig(1);
+  s += `<g><g class="paperFall"><path d="M-46,-30 L46,-38 L50,30 L-40,36 Z" fill="#bdbdbd" stroke="#333" stroke-width="3"/></g></g>`;
+  return s;
+};
+
+/* ---------- "Obrigado por abrir a porta" ---------- */
+ART.noteObrigado = () => {
+  seed(27);
+  let s = bg('#060606');
+  s += `<g opacity=".3">` + leg(220, -600, 1500, 170, 1, { toes: false }) + leg(500, -600, 1500, 160, -1, { toes: false }) + `</g>` + vig(1);
+  s += paper(390, 780, 380, 480, -12, ['OBRIGADO POR', 'ABRIR A PORTA,', 'AQUI FORA É', 'MUITO', 'ESCURO'], { fs: 58, lh: 76, fill: '#f2f2f2', shadowOp: .4 });
+  return s;
+};
+
+/* ---------- FLAP ---------- */
+ART.paperFlap = () => {
+  seed(28);
+  let s = bg('#0b0b0b');
+  s += trunk(70, -20, 70, 1300, 80, 80, '#3a3a3a', .7);
+  s += `<rect y="880" width="${W}" height="400" fill="#1a1a1a"/>` + grass(0, 720, 860, 1290, 900, '#c5c5c5', 1.8, [20, 50], .8) + grass(0, 720, 900, 1290, 600, '#080808', 2);
+  s += leg(270, -500, 1130, 190, 1, { toes: false }) + leg(500, -500, 1130, 180, -1, { toes: false });
+  s += paper(660, 1220, 220, 190, -10, ['OBRIGADO POR', 'ABRIR A PORTA'], { fs: 30, lh: 34, shadowOp: .4 });
+  s += `<g class="flapIn"><path d="M420,900 C480,870 600,880 640,860 C620,920 520,960 420,940 Z" fill="#ececec" stroke="${INK}" stroke-width="4" filter="url(#ink)"/></g>`;
+  s += `<text x="380" y="740" font-family="Patrick Hand SC, cursive" font-size="64" fill="#e9e9e9" transform="rotate(6 380 740)" class="flapIn">FLAP</text>`;
+  s += inkD('M140,720 l40,6 M150,760 l36,-2 M146,690 l30,12', 3, '#ddd');
+  return s + vig(.7);
+};
+
+/* ---------- pés na grama + bilhete ---------- */
+ART.feetPaper = () => {
+  seed(29);
+  let s = bg('#050505');
+  s += `<rect y="600" width="${W}" height="680" fill="#141414"/>` + grass(0, 720, 560, 1080, 1600, '#d0d0d0', 1.8, [20, 50], .85) + grass(0, 720, 600, 1080, 900, '#050505', 2.4, [16, 36]);
+  s += leg(200, -2000, 590, 150, 1) + leg(500, -2000, 590, 150, -1);
+  s += `<path d="M330,520 L560,560 L520,640 L300,600 Z" fill="#efefef" stroke="${INK}" stroke-width="4" filter="url(#ink)"/>`;
+  s += grass(150, 600, 560, 640, 260, '#050505', 2.2, [14, 30]);
+  s += `<rect y="1000" width="${W}" height="280" fill="#d9d9d9"/>` + `<path d="M0,1000 C200,980 500,990 720,1000" stroke="#999" stroke-width="3" fill="none"/>`;
+  return s;
+};
+ART.noteNaoFique = () => {
+  seed(30);
+  let s = bg('#060606') + `<rect y="560" width="${W}" height="720" fill="#151515"/>` + grass(0, 720, 540, 1080, 1300, '#d0d0d0', 1.8, [20, 50], .85) + grass(0, 720, 580, 1080, 700, '#050505', 2.4, [16, 36]);
+  s += `<rect y="1050" width="${W}" height="230" fill="#d9d9d9"/>`;
+  s += paper(420, 500, 470, 560, 2, ['NÃO FIQUE AÍ', 'DENTRO, É MAIS', 'SEGURO AQUI FORA...', 'DESDE QUE SIGA', 'A TRILHA.'], { fs: 52, lh: 80, shadowOp: .5 });
+  return s + vig(.5);
+};
+ART.forestNote = () => {
+  seed(31);
+  let s = forestBase({ seed: 31, red: 0, lit: .3 });
+  s += paper(110, 960, 220, 270, -4, ['NÃO FIQUE AÍ', 'DENTRO, É MAIS', 'SEGURO AQUI FORA..', 'DESDE QUE SIGA', 'A TRILHA.'], { fs: 22, lh: 34, fill: '#dcdcdc' });
+  return s + vig(1);
+};
+
+/* ---------- floresta com névoa ---------- */
+function forestBase(o = {}) {
+  seed(o.seed || 40);
+  let s = bg('#0c0c0c') + `<rect width="${W}" height="${H}" fill="url(#forestSky)"/>`;
+  s += `<g class="sway">`;
+  for (let i = 0; i < 14; i++) {
+    const x = rr(-20, 740), w = rr(10, 34), c = Math.round(rr(40, 70));
+    s += trunk(x, -20, x + rr(-10, 10), rr(800, 1000), w, w * 1.1, `rgb(${c},${c},${c})`, .7);
+  }
+  s += fog(5, 500, 1000, .3);
+  for (let i = 0; i < (o.near || 5); i++) {
+    const x = [30, 170, 430, 600, 700][i] + rr(-30, 30), w = rr(30, 70), c = Math.round(rr(90, 140) * (1 + (o.lit || 0) * .3));
+    s += trunk(x, -40, x + rr(-14, 14), 1050, w, w * 1.15, `rgb(${c},${c},${c})`, .85);
+    if (o.red) s += redBand(x + rr(-6, 6), rr(620, 900), w + 12, rr(-12, 12), o.red);
+  }
+  if (o.fallen) s += trunk(380, 0, 720, 820, 46, 60, '#7a7a7a', .7);
+  s += `</g>`;
+  s += `<rect y="870" width="${W}" height="410" fill="#111" opacity=".6"/>`;
+  s += grass(-20, 740, 860, 1290, 1300, '#8a8a8a', 1.5, [20, 60], .55 + (o.lit || 0) * .4) + grass(-20, 740, 880, 1290, 700, '#0b0b0b', 2, [14, 40]);
+  s += fog(4, 760, 1100, .35, '#aaa', 'drift');
+  s += `<ellipse cx="420" cy="980" rx="380" ry="300" fill="#ddd" opacity="${.12 + (o.lit || 0) * .2}" filter="url(#blur40)" class="breath"/>`;
+  s += bokeh();
+  return s;
+}
+ART.forest1 = () => forestBase({ seed: 41 }) + vig(.9) + torch();
+ART.forest2 = () => forestBase({ seed: 42, red: .8, fallen: true }) + vig(.9) + torch();
+ART.forest3 = () => forestBase({ seed: 43, red: .95, lit: .4 }) + vig(.9) + torch();
+
+/* ---------- trilha vermelha ---------- */
+ART.trunksRed = () => {
+  seed(50);
+  let s = bg('#0a0a0a') + `<g class="sway">`;
+  s += trunk(150, -40, 30, 1100, 60, 70, '#8a8a8a', .9) + trunk(420, -40, 400, 980, 50, 60, '#dcdcdc', 1) + trunk(470, -40, 640, 1000, 54, 60, '#e2e2e2', 1) + trunk(300, -40, 280, 900, 30, 34, '#666', .8);
+  s += trunk(600, -40, 590, 1000, 40, 40, '#555', .7) + trunk(40, -40, 50, 1100, 36, 36, '#444', .7);
+  s += redBand(412, 640, 70, -6) + redBand(568, 700, 76, 20) + redBand(20, 560, 70, 8) + redBand(110, 520, 60, -14);
+  s += `</g>` + `<rect y="860" width="${W}" height="420" fill="#141414" opacity=".7"/>` + grass(-20, 740, 820, 1290, 1600, '#cfcfcf', 1.6, [24, 80], .8) + grass(-20, 740, 860, 1290, 900, '#090909', 2, [20, 60]);
+  s += `<ellipse cx="420" cy="760" rx="300" ry="400" fill="#fff" opacity=".1" filter="url(#blur40)"/>` + vig(.9) + bokeh() + torch();
+  return s;
+};
+ART.ribbonClose = () => {
+  seed(51);
+  let s = bg('#151515') + fog(6, 200, 1200, .35, '#777');
+  s += trunk(70, -60, -40, 900, 120, 170, '#d6d6d6', 1) + trunk(640, -60, 760, 900, 120, 170, '#d6d6d6', 1);
+  s += `<g filter="url(#ink)"><path d="M0,140 L80,170 L40,250 M0,170 L60,120" stroke="${RED}" stroke-width="12" fill="none"/>
+    <path d="M60,160 C120,200 140,260 200,300 C260,340 280,320 320,330 C400,340 500,310 560,320 C620,340 660,410 700,420" stroke="${RED}" stroke-width="7" fill="none" class="ribbonWave"/>
+    <path d="M700,420 L660,460 M690,380 L720,440 M680,400 l40,20" stroke="${RED}" stroke-width="12" fill="none"/></g>`;
+  return s + vig(.9) + bokeh() + torch({ bat: CTX.bat });
+};
+ART.ribbonDark = () => {
+  seed(52);
+  let s = bg('#151515') + fog(6, 200, 1200, .3, '#666');
+  s += `<g filter="url(#ink)"><path d="M720,240 C640,280 600,320 560,360 C520,400 480,420 420,400 C360,380 320,440 260,480 C200,520 120,520 60,560 C30,580 10,590 -20,600" stroke="${RED}" stroke-width="12" fill="none" class="ribbonWave"/></g>`;
+  return s + vig(.9) + bokeh() + torch();
+};
+ART.ribbonDoorFar = () => {
+  seed(53);
+  let s = bg('#101010') + fog(5, 300, 1100, .25, '#555');
+  s += `<g filter="url(#ink)"><path d="M-20,760 C60,740 140,720 220,700 C280,690 320,690 340,700" stroke="${RED}" stroke-width="12" fill="none"/>
+    <path d="M740,840 C660,800 560,760 460,720 C420,706 400,702 382,700" stroke="${RED}" stroke-width="14" fill="none"/></g>`;
+  s += `<rect x="352" y="666" width="16" height="30" fill="none" stroke="${NEON}" stroke-width="2.5" filter="url(#glowR)" class="neonFlick"/>`;
+  return s + vig(.9) + bokeh() + torch();
+};
+function redDoor(x, y, w, h, o = {}) {
+  const fs = o.fs || w * .17;
+  let s = `<g filter="url(#glowR)" class="neonFlick">`;
+  s += `<path d="${wl([[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]], 1.5, 30)}" stroke="${NEON}" stroke-width="${o.sw || 6}" fill="none" stroke-linejoin="round"/>`;
+  if (o.text !== false) ['DESLIGUE', 'A LANTERNA', 'PARA ENTRAR'].forEach((t, i) => s += `<text x="${x + w / 2}" y="${y + h * .2 + i * fs * 1.15}" text-anchor="middle" font-family="Patrick Hand SC, cursive" font-size="${fs}" fill="${NEON}">${t}</text>`);
+  s += `<rect x="${x + w * .07}" y="${y + h * .58}" width="${w * .09}" height="${h * .11}" fill="none" stroke="${NEON}" stroke-width="${(o.sw || 6) * .6}"/><circle cx="${x + w * .115}" cy="${y + h * .615}" r="${w * .025}" fill="none" stroke="${NEON}" stroke-width="${(o.sw || 6) * .5}"/>`;
+  return s + `</g>`;
+}
+ART.doorRedNear = () => {
+  seed(54);
+  let s = bg('#0e0e0e') + fog(4, 300, 1100, .2, '#444');
+  s += `<g filter="url(#ink)"><path d="M-20,1010 C40,990 100,980 200,978" stroke="${RED}" stroke-width="9" fill="none"/><path d="M740,960 C680,952 600,950 520,948" stroke="${RED}" stroke-width="7" fill="none"/></g>`;
+  s += redDoor(206, 470, 310, 500);
+  return s + vig(.8) + bokeh(.05) + torch({ dim: .25 });
+};
+ART.click = () => {
+  seed(55);
+  let s = bg('#000');
+  s += `<g filter="url(#ink)"><path d="M-20,700 C20,690 60,688 100,690" stroke="${RED}" stroke-width="7" fill="none"/><path d="M740,700 C700,690 660,688 620,690" stroke="${RED}" stroke-width="6" fill="none"/></g>`;
+  s += redDoor(180, 330, 300, 520);
+  s += `<text x="540" y="890" font-family="Patrick Hand SC, cursive" font-size="40" fill="#ddd" transform="rotate(-8 540 890)">click</text>`;
+  return s + torch({ dim: .82, redline: true });
+};
+ART.doorRedClose = () => bg('#000') + redDoor(110, 220, 520, 940, { sw: 9 }) + vig(.5);
+ART.handRedKnob = () => {
+  seed(56);
+  let s = bg('#000');
+  s += `<g filter="url(#glowR)" class="neonFlick"><path d="M40,-20 L40,1300" stroke="${NEON}" stroke-width="16"/><path d="M500,-20 l20,80" stroke="${NEON}" stroke-width="16"/>
+    <rect x="240" y="380" width="250" height="260" fill="none" stroke="${NEON}" stroke-width="12" transform="rotate(4 365 510)"/><circle cx="370" cy="470" r="40" fill="none" stroke="${NEON}" stroke-width="10"/>
+    <path d="M100,1240 L690,1240 L690,1300" stroke="${NEON}" stroke-width="12" fill="none"/></g>`;
+  return s;
+};
+ART.handPushRed = () => {
+  seed(57);
+  let s = bg('#000');
+  s += `<g filter="url(#glowR)" class="neonFlick pushHand"><path d="M40,-20 L40,1300" stroke="${NEON}" stroke-width="18"/>
+    <text x="300" y="120" font-family="Patrick Hand SC, cursive" font-size="200" fill="${NEON}">DE</text>
+    <text x="370" y="880" font-family="Patrick Hand SC, cursive" font-size="230" fill="${NEON}">AR</text>
+    <path d="M520,420 l-60,120 M500,520 l40,10" stroke="${NEON}" stroke-width="16"/>
+    <rect x="330" y="1180" width="220" height="140" fill="none" stroke="${NEON}" stroke-width="12"/></g>`;
+  return s;
+};
+
+/* ---------- a porta cai para dentro ---------- */
+ART.doorFalls = () => {
+  let s = bg('#000');
+  s += `<g filter="url(#glowR)"><rect x="40" y="90" width="640" height="1130" fill="none" stroke="${NEON}" stroke-width="12"/>
+    <path fill="none" stroke="${NEON}" stroke-width="10" d="M40,90 L680,90 L680,1220 L40,1220 Z">
+      <animate attributeName="d" dur="1.6s" begin=".5s" fill="freeze" calcMode="spline" keySplines=".5 0 .9 .5" values="M40,90 L680,90 L680,1220 L40,1220 Z;M90,860 L630,860 L700,1220 L20,1220 Z"/></path>
+    <g><animateTransform attributeName="transform" type="translate" dur="1.6s" begin=".5s" fill="freeze" calcMode="spline" keySplines=".5 0 .9 .5" values="0 0;0 820"/><g><animateTransform attributeName="transform" type="scale" dur="1.6s" begin=".5s" fill="freeze" calcMode="spline" keySplines=".5 0 .9 .5" values="1 1;1 .26"/>
+      ${['DESLIGUE', 'A LANTERNA', 'PARA ENTRAR'].map((t, i) => `<text x="360" y="${300 + i * 110}" text-anchor="middle" font-family="Patrick Hand SC, cursive" font-size="96" fill="${NEON}">${t}</text>`).join('')}
+      <rect x="80" y="740" width="60" height="120" fill="none" stroke="${NEON}" stroke-width="7"/></g></g></g>`;
+  return s;
+};
+ART.redDot = () => bg('#000') + `<circle cx="360" cy="660" r="9" fill="${NEON}" filter="url(#glowR)" class="flameFlick"/>`;
+
+/* ---------- o ser encolhido no escuro ---------- */
+ART.hunched = (b = {}) => {
+  seed(60);
+  let s = bg('#000');
+  // vela
+  s += `<g class="flameFlick"><ellipse cx="300" cy="930" rx="70" ry="90" fill="${NEON}" opacity=".16" filter="url(#blur40)"/>
+    <path d="M300,890 C282,910 280,930 300,944 C320,930 318,910 300,890 Z" fill="#ff3b22" filter="url(#glowR)"/></g>`;
+  s += `<rect x="292" y="944" width="16" height="40" fill="#7a0d08"/>`;
+  s += `<g opacity=".5" filter="url(#blur2)" class="flameFlick"><path d="M282,1000 l36,0 M286,1012 l28,0 M290,1026 l20,0 M294,1040 l12,0 M297,1054 l6,0" stroke="${NEON}" stroke-width="5"/></g>`;
+  // figura sentada, cabeça baixa, abraçando os joelhos
+  const fig = 'M552,708 C586,708 604,736 602,768 C640,790 668,850 670,930 C672,980 656,1010 624,1014 L474,1014 C466,986 470,940 478,894 C482,860 492,834 508,822 C500,800 506,760 522,734 C532,718 540,708 552,708 Z';
+  s += `<g class="breathe"><path d="${fig}" fill="#080202"/>`;
+  s += `<path d="M522,734 C506,760 500,800 508,822 C492,834 482,860 478,894 C470,940 466,986 474,1014" fill="none" stroke="#b0180e" stroke-width="3" opacity=".75" filter="url(#blur2)"/>`;
+  s += `<path d="M512,826 C540,830 560,860 556,900 C552,930 520,940 500,930" fill="none" stroke="#3e0805" stroke-width="3"/>
+    <path d="M560,790 C580,840 600,900 610,1000" fill="none" stroke="#2a0503" stroke-width="3"/>
+    <path d="M530,730 C540,716 556,712 570,716" fill="none" stroke="#8a140c" stroke-width="2.5" opacity=".7"/></g>`;
+  if (b.eyes) s += `<g class="eyesOn"><circle cx="536" cy="760" r="3.2" fill="${NEON}" filter="url(#glowR)"/><circle cx="556" cy="758" r="3.2" fill="${NEON}" filter="url(#glowR)"/></g>`;
+  if (b.torch) s += torch({ dim: .85, redline: true });
+  if (b.click) s += `<text x="560" y="1080" font-family="Patrick Hand SC, cursive" font-size="40" fill="#ddd" transform="rotate(-8 560 1080)">click</text>`;
+  return s;
+};
+
+/* ---------- a luz revela as criaturas ---------- */
+ART.monsters = () => {
+  seed(61);
+  let s = bg('#151515') + `<ellipse cx="420" cy="1050" rx="460" ry="300" fill="#bdbdbd" opacity=".55" filter="url(#blur40)"/>`;
+  s += `<g class="shake">`;
+  s += `<g filter="url(#ink)" opacity=".85">
+    <path d="M420,320 C380,320 370,370 380,410 C330,430 300,480 300,560 C296,640 320,700 350,740 C340,800 340,880 350,960 L410,960 L430,800 L460,800 L480,960 L540,960 C550,880 550,800 540,740 C570,700 590,640 586,560 C584,480 560,430 500,410 C510,370 470,320 420,320 Z" fill="#5a1a14" stroke="#2a0805" stroke-width="5"/>
+    <path d="M330,560 C380,600 500,600 560,560 M340,640 C390,670 500,670 560,640 M330,470 C300,560 300,640 310,700" stroke="#3a0d0a" stroke-width="5" fill="none"/>
+    <ellipse cx="420" cy="380" rx="26" ry="30" fill="#1a0504"/>
+    <path d="M334,470 C300,520 290,640 296,760 L322,760 C324,660 336,560 356,500 Z M508,470 C550,520 566,640 566,750 L540,752 C536,660 524,560 500,500 Z" fill="#4a140f" stroke="#2a0805" stroke-width="4"/></g>`;
+  s += `<g filter="url(#ink)" transform="translate(-90 20)">
+    <path d="M520,900 C540,840 600,820 640,840 C680,860 690,920 680,960 C700,990 720,1040 720,1080 L560,1090 C540,1060 520,1040 500,1040 C480,1020 470,990 480,960 C470,940 490,920 520,900 Z" fill="#9b1a10" stroke="#2a0805" stroke-width="5"/>
+    <circle cx="610" cy="860" r="40" fill="#a8241a" stroke="#2a0805" stroke-width="5"/>
+    <path d="M588,872 C596,900 630,900 638,872 Z" fill="#1a0504"/><path d="M592,876 l4,10 l4,-10 l4,10 l4,-10 l4,10 l4,-10 l4,10 l4,-10" stroke="#eee" stroke-width="2.5" fill="none"/>
+    <circle cx="610" cy="840" r="9" fill="#1a0504"/>
+    <path d="M520,960 C480,940 450,960 440,1000 M560,1000 C520,1010 500,1040 470,1060" stroke="#2a0805" stroke-width="6" fill="none"/></g>`;
+  s += `<path d="M240,980 C232,996 232,1008 240,1016 C248,1008 248,996 240,980 Z" fill="#ff3b22" filter="url(#glowR)"/><rect x="234" y="1016" width="12" height="30" fill="#7a0d08"/>`;
+  s += `<rect x="0" y="1040" width="${W}" height="20" fill="#bbb" opacity=".3" filter="url(#blur6)"/>`;
+  s += `</g>` + fog(4, 300, 1200, .35, '#888') + vig(.8) + bokeh() + torch({ bat: CTX.bat });
+  return s;
+};
+ART.fogRun = () => {
+  seed(62);
+  let s = bg('#202020') + `<g class="runShake">` + `<ellipse cx="380" cy="1000" rx="500" ry="380" fill="#9a9a9a" opacity=".5" filter="url(#blur40)"/>`;
+  s += `<g opacity=".35" filter="url(#blur18)"><path d="M420,320 C380,320 370,370 380,410 C330,430 300,480 300,560 C296,640 320,700 350,740 L350,960 L540,960 L540,740 C570,700 590,640 586,560 C584,480 560,430 500,410 C510,370 470,320 420,320 Z" fill="#6a1a14" class="fadeOut"/></g>`;
+  s += fog(7, 200, 1200, .45, '#9a9a9a') + `</g>` + vig(.9) + bokeh() + torch();
+  return s;
+};
+ART.doorTinyFar = () => {
+  seed(63);
+  let s = bg('#1a1a1a') + `<ellipse cx="400" cy="1000" rx="460" ry="360" fill="#8a8a8a" opacity=".45" filter="url(#blur40)"/>` + fog(5, 200, 1100, .3, '#7a7a7a');
+  s += `<g class="approach"><path d="M352,520 L368,520 L368,556 L352,556 Z M346,556 L374,556 L380,570 L340,570 Z" stroke="${NEON}" stroke-width="2.5" fill="none" filter="url(#glowR)"/></g>`;
+  return s + vig(.9) + bokeh() + torch();
+};
+ART.doorFlat = () => {
+  seed(64);
+  let s = bg('#1a1a1a') + `<ellipse cx="400" cy="1000" rx="460" ry="360" fill="#8a8a8a" opacity=".45" filter="url(#blur40)"/>` + fog(4, 200, 1100, .3, '#7a7a7a');
+  s += `<g filter="url(#glowR)"><rect x="250" y="250" width="216" height="330" fill="none" stroke="${NEON}" stroke-width="7"/>
+    <path d="M250,580 L466,580 L520,800 L196,800 Z" fill="none" stroke="${NEON}" stroke-width="7"/>
+    <g transform="translate(358 690) rotate(180) scale(1 .5)">${['DESLIGUE', 'A LANTERNA', 'PARA ENTRAR'].map((t, i) => `<text x="0" y="${-80 + i * 66}" text-anchor="middle" font-family="Patrick Hand SC, cursive" font-size="60" fill="${NEON}">${t}</text>`).join('')}</g>
+    <path d="M270,330 C300,300 320,320 340,300 M400,310 C420,280 440,290 460,280" stroke="${RED}" stroke-width="5" fill="none"/></g>`;
+  return s + vig(.9) + bokeh() + torch();
+};
+ART.doorBig = () => {
+  seed(65);
+  let s = bg('#1d1d1d') + fog(5, 200, 1100, .3, '#6a6a6a');
+  s += `<g class="pushFast"><rect x="20" y="80" width="680" height="1060" fill="none" stroke="${NEON}" stroke-width="22" filter="url(#glowR)"/>
+    <path d="M60,480 C140,400 200,370 260,380 C340,400 380,420 440,400 C500,380 540,320 580,300" stroke="${RED}" stroke-width="10" fill="none" filter="url(#ink)"/></g>`;
+  return s + vig(.9) + bokeh() + torch();
+};
+ART.ribbonFog = (b = {}) => {
+  seed(66);
+  let s = bg('#1d1d1d') + `<ellipse cx="400" cy="1000" rx="460" ry="360" fill="#7a7a7a" opacity=".45" filter="url(#blur40)"/>` + fog(5, 300, 1100, .3, '#6a6a6a');
+  s += `<g filter="url(#ink)" class="ribbonWave"><path d="M-20,700 C60,720 120,780 200,770 C260,760 300,720 340,724" stroke="${RED}" stroke-width="14" fill="none"/>
+    <path d="M380,724 C420,730 460,770 520,770 C600,770 640,720 740,700" stroke="${RED}" stroke-width="14" fill="none"/></g>`;
+  if (b.tri) s += `<g class="approach"><path d="M360,670 L380,750 L340,750 Z" fill="#d9d9d9" filter="url(#chalk)"/><path d="M360,672 L344,750 M360,672 L376,750" stroke="#fff" stroke-width="3"/></g>`;
+  return s + vig(.9) + bokeh() + torch();
+};
+ART.forestRun = () => {
+  seed(67);
+  let s = bg('#080808') + `<g class="runShake"><g filter="url(#motionV)">`;
+  for (let i = 0; i < 9; i++) { const x = rr(-20, 740), w = rr(30, 80), c = Math.round(rr(150, 230)); s += trunk(x, -40, x + rr(-20, 20), 1000, w, w, `rgb(${c},${c},${c})`, .95); if (rnd() < .6) s += redBand(x, rr(450, 700), w + 10, rr(-10, 10)); }
+  s += `<rect y="820" width="${W}" height="460" fill="#1a1a1a"/>` + grass(-20, 740, 800, 1290, 1400, '#e0e0e0', 2.2, [20, 70], .9);
+  s += `</g></g><ellipse cx="420" cy="900" rx="320" ry="420" fill="#fff" opacity=".12" filter="url(#blur40)"/>` + vig(.9) + torch();
+  return s;
+};
+ART.legsNear = () => {
+  seed(68);
+  let s = bg('#0a0a0a') + `<ellipse cx="460" cy="900" rx="420" ry="500" fill="#fff" opacity=".12" filter="url(#blur40)"/>`;
+  s += trunk(260, -40, 280, 900, 26, 30, '#6a6a6a', .6) + trunk(640, -40, 600, 900, 36, 36, '#5a5a5a', .5);
+  s += trunk(720, -60, 480, 1060, 70, 120, '#e6e6e6', 1);
+  s += `<rect y="760" width="${W}" height="520" fill="#0d0d0d" opacity=".5"/>` + grass(-20, 740, 760, 1290, 380, '#e4e4e4', 1.8, [10, 26], .85, 'scribble');
+  s += `<g filter="url(#ink)"><path d="M120,-40 C126,200 120,500 128,760 C130,800 120,810 104,820 L140,824 C150,800 148,780 150,760 C156,500 160,200 156,-40 Z" fill="#e2e2e2"/>
+    <path d="M168,-40 C172,200 166,500 172,770 C174,800 166,816 152,826 L188,828 C196,806 196,786 196,770 C200,500 204,200 200,-40 Z" fill="#d6d6d6"/></g>`;
+  s += `<path d="M104,820 l-6,10 M114,822 l-4,10 M156,826 l-6,10 M166,828 l-4,10" stroke="#ccc" stroke-width="3"/>`;
+  return s + vig(.85) + bokeh() + torch();
+};
+ART.legsClose = () => {
+  seed(69);
+  let s = bg('#060606') + `<ellipse cx="400" cy="900" rx="420" ry="600" fill="#fff" opacity=".14" filter="url(#blur40)"/>`;
+  s += `<g class="pushSlow">` + trunk(220, -60, 270, 1400, 130, 160, '#e6e6e6', 1) + trunk(560, -60, 480, 1400, 120, 150, '#ececec', 1) + `</g>`;
+  s += `<rect width="${W}" height="400" fill="url(#upDark)" opacity=".9"/>`;
+  return s + vig(.85) + bokeh() + torch();
+};
+ART.paperFall2 = () => {
+  seed(70);
+  let s = bg('#060606') + `<ellipse cx="400" cy="900" rx="420" ry="600" fill="#fff" opacity=".12" filter="url(#blur40)"/>`;
+  s += trunk(330, -60, 230, 1400, 110, 130, '#e2e2e2', 1) + trunk(380, -60, 520, 1400, 100, 130, '#ececec', 1);
+  s += `<rect width="${W}" height="500" fill="url(#upDark)"/>`;
+  s += `<g class="paperFall"><path d="M-40,-30 L40,-36 L44,30 L-36,34 Z" fill="#cfcfcf" stroke="#333" stroke-width="3"/></g>`;
+  return s + vig(.85) + bokeh() + torch();
+};
+ART.noteFugiu = () => {
+  seed(71);
+  let s = bg('#060606') + `<ellipse cx="400" cy="900" rx="420" ry="600" fill="#fff" opacity=".12" filter="url(#blur40)"/>`;
+  s += trunk(330, -60, 230, 1400, 110, 130, '#e2e2e2', 1) + trunk(380, -60, 520, 1400, 100, 130, '#ececec', 1);
+  s += `<rect width="${W}" height="500" fill="url(#upDark)"/>`;
+  s += `<g class="hover">` + paper(370, 640, 240, 270, 14, ['OH,', 'VOCÊ', 'FUGIU...'], { fs: 46, lh: 56, fill: '#efefef', shadowOp: .4 }) + `</g>`;
+  return s + vig(.85) + bokeh() + torch();
+};
+ART.catchPaper = () => {
+  seed(72);
+  let s = bg('#060606') + `<ellipse cx="400" cy="900" rx="420" ry="600" fill="#fff" opacity=".12" filter="url(#blur40)"/>`;
+  s += trunk(340, -60, 360, 1400, 90, 100, '#d8d8d8', 1) + trunk(560, -60, 590, 1400, 90, 100, '#e2e2e2', 1);
+  s += paper(300, 900, 320, 400, -4, [], { fill: '#f0f0f0', shadowOp: .4, after: `<path d="M-60,-40 l120,60 l-90,40 l100,40" stroke="#aaa" stroke-width="4" fill="none" opacity=".5"/>` });
+  return s + vig(.85);
+};
+ART.noteOlhe = () => {
+  seed(73);
+  let s = bg('#060606') + `<ellipse cx="400" cy="900" rx="420" ry="600" fill="#fff" opacity=".1" filter="url(#blur40)"/>`;
+  s += trunk(330, -60, 350, 1400, 90, 100, '#d0d0d0', .9) + trunk(560, -60, 590, 1400, 90, 100, '#d8d8d8', .9);
+  s += paper(320, 900, 400, 470, -8, ['OLHE', 'PARA', 'MIM'], { fs: 96, lh: 120, fill: '#efefef', shadowOp: .5, font: 'Rock Salt, Patrick Hand SC, cursive' });
+  return s + vig(.8);
+};
+ART.legsUp2 = () => {
+  seed(74);
+  let s = bg('#060606') + `<g class="tiltUpShort">`;
+  s += trunk(250, 1400, 330, 120, 110, 50, '#e4e4e4', 1) + trunk(520, 1400, 400, 120, 110, 50, '#e8e8e8', 1);
+  s += `<ellipse cx="366" cy="110" rx="70" ry="60" fill="#666" opacity=".5" filter="url(#blur18)"/>`;
+  s += `</g><rect width="${W}" height="400" fill="url(#upDark)"/>`;
+  return s + vig(.85) + bokeh() + torch();
+};
+
+/* ---------- o rosto ---------- */
+function face(o = {}) {
+  let s = `<g filter="url(#ink)">`;
+  // cabelos em coques
+  for (let i = 0; i < 9; i++) { const a = Math.PI * (1.05 + i * .11), x = 360 + Math.cos(a) * 170, y = 330 + Math.sin(a) * 210; s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="${f1(rr(14, 20))}" fill="#1a1a1a" stroke="#555" stroke-width="3"/>`; }
+  s += `<path d="M330,-40 L330,130 M390,-40 L390,130" stroke="#3a3a3a" stroke-width="30"/>`;
+  s += `<path d="M360,120 C460,120 540,200 540,330 C540,460 500,560 420,600 C390,612 330,612 300,600 C220,560 180,460 180,330 C180,200 260,120 360,120 Z" fill="#f1f1f1" stroke="${INK}" stroke-width="5"/>`;
+  s += `<path d="M470,180 C520,260 530,400 480,520" stroke="#aaa" stroke-width="16" fill="none" opacity=".5" filter="url(#blur6)"/>`;
+  s += hatch(470, 200, 530, 540, 40, '#000', .2, true, [10, 40]);
+  s += `<path d="M300,300 l6,50 M314,300 l2,48 M410,300 l-4,50 M424,300 l-2,48" stroke="${INK}" stroke-width="6" stroke-linecap="round"/>`;
+  s += `<path d="M352,380 l-6,26 M370,380 l6,26" stroke="${INK}" stroke-width="4"/>`;
+  s += `<path d="M262,452 C300,430 420,430 460,452 C450,520 400,560 360,560 C310,560 270,520 262,452 Z" fill="#c8c8c8" stroke="${INK}" stroke-width="5"/>`;
+  s += `<path d="M276,456 C310,446 410,446 448,456 L444,486 C410,480 310,480 280,486 Z" fill="#fafafa" stroke="${INK}" stroke-width="3"/>`;
+  for (let i = 0; i < 9; i++) s += `<path d="M${290 + i * 18},450 l0,34" stroke="${INK}" stroke-width="2.4"/>`;
+  s += `<path d="M284,496 C320,510 400,510 440,496 L430,524 C400,534 320,534 292,524 Z" fill="#efefef" stroke="${INK}" stroke-width="3"/>`;
+  for (let i = 0; i < 8; i++) s += `<path d="M${300 + i * 18},498 l0,30" stroke="${INK}" stroke-width="2.4"/>`;
+  if (o.note) s += `<g transform="rotate(-6 360 520)"><rect x="296" y="486" width="132" height="76" fill="#efefef" stroke="${INK}" stroke-width="3"/><text x="362" y="516" text-anchor="middle" font-family="Patrick Hand SC, cursive" font-size="24" fill="${RED}">ATÉ A</text><text x="362" y="546" text-anchor="middle" font-family="Patrick Hand SC, cursive" font-size="24" fill="${RED}">PRÓXIMA</text></g>`;
+  s += `</g>`;
+  return s;
+}
+function faceScene(o) {
+  seed(75);
+  let s = bg('#060606') + `<ellipse cx="380" cy="800" rx="420" ry="700" fill="#fff" opacity=".1" filter="url(#blur40)"/>`;
+  s += trunk(220, 1400, 290, 520, 110, 70, '#e4e4e4', 1) + trunk(520, 1400, 440, 520, 110, 70, '#e8e8e8', 1);
+  s += `<g class="${o.cls || 'faceIn'}">` + face(o) + `</g>`;
+  return s + vig(.85) + bokeh() + torch();
+}
+ART.face = () => faceScene({});
+ART.faceNote = () => faceScene({ note: true, cls: 'faceTwitch' });
+ART.faceLunge = () => {
+  seed(76);
+  let s = bg('#101010') + `<ellipse cx="380" cy="800" rx="420" ry="700" fill="#fff" opacity=".12" filter="url(#blur40)"/>`;
+  s += `<g class="lunge"><g filter="url(#motionD)">` + face({ note: true }) + `</g></g>`;
+  return s + vig(.85) + torch();
+};
+ART.redFlesh = () => {
+  seed(77);
+  let s = bg('#b8342a');
+  s += `<g class="swallow"><g filter="url(#motionV)">`;
+  for (let i = 0; i < 18; i++) s += `<path d="M${f1(rr(-60, 760))},${f1(rr(200, 1300))} q${f1(rr(80, 200))},${f1(rr(-30, 30))} ${f1(rr(200, 400))},${f1(rr(-20, 20))}" stroke="${rnd() < .5 ? '#ffffff' : '#3a0805'}" stroke-width="${f1(rr(8, 30))}" opacity="${f1(rr(.25, .6) * 100) / 100}" fill="none"/>`;
+  s += `<ellipse cx="380" cy="160" rx="240" ry="200" fill="#120303" filter="url(#blur18)"/>`;
+  s += `<path d="M120,40 C140,320 620,320 640,40" stroke="#e25a4c" stroke-width="22" fill="none" filter="url(#blur6)"/>`;
+  s += `</g></g>` + vig(.8) + torch({ skin: '#f2d8d4' });
+  return s;
+};
+ART.blurLight = () => bg('#000') + `<g class="lightGrow"><ellipse cx="360" cy="560" rx="80" ry="90" fill="#e8e8e8" filter="url(#blur40)"/><ellipse cx="380" cy="560" rx="40" ry="40" fill="#555" opacity=".5" filter="url(#blur18)"/></g>`;
+ART.corridorEnd = () => corridorBase({ seed: 2 }) + `<g class="pulse">` + inkD('M306,562 C292,558 278,560 258,562 M270,552 L256,562 L270,570', 4, RED) + inkD('M378,564 C394,560 410,560 430,556 M418,548 L431,556 L418,566', 4, RED) + `</g>` + vig(.75) + `<rect width="${W}" height="${H}" fill="#000" opacity="0" class="fadeFromBlack"/>`;
+
+/* ============================================================
+   DESTINO — roteiro (ciclo I), na ordem dos quadros originais.
+   Em cada escolha, a opção com caminho desenhado leva "go";
+   as demais aparecem com a porcentagem da votação, travadas.
+   ============================================================ */
+'use strict';
+const STORY = {
+  inicio: { beats: [
+    { art: 'redTitle', t: 0, type: { t: 'O destino está em suas mãos', col: '#130000', y: 41 }, amb: 'room' },
+    { art: 'corridor', t: 900, choice: { q: '?', opts: [['Esquerda', 40], ['Direita', 60, 'direita']] } },
+  ] },
+
+  direita: { beats: [
+    { art: 'corridorRed', choice: { q: '?', opts: [['Entrar na porta', 30], ['Seguir o vermelho', 70, 'vermelho']] } },
+  ] },
+
+  vermelho: { beats: [
+    { art: 'redWalk1', sfx: 'steps', amb: 'dark' },
+    { art: 'redWalk2', sfx: 'steps' },
+    { art: 'black', t: 1200, auto: 1600 },
+    { art: 'spark', t: 300 },
+    { art: 'doorDark' },
+    { art: 'noteNaoOlhe', sfx: 'paper', choice: { q: '?', opts: [['Olhar para trás', 47], ['Abrir a porta', 53, 'abrir1']] } },
+  ] },
+
+  abrir1: { beats: [
+    { art: 'knobHand', sfx: 'knob' },
+    { art: 'pushPlate', sfx: 'creak' },
+    { art: 'white', t: 250, auto: 900, amb: 'room' },
+    { art: 'roomHoles', t: 1400 },
+    { art: 'noteRule', sfx: 'paper' },
+    { art: 'holeChave' },
+    { art: 'holeQ' },
+    { art: 'roomHoles', choice: { q: 'ESCOLHA', opts: [['?', 56, 'buraco'], ['Chave', 44]] } },
+  ] },
+
+  buraco: { beats: [
+    { art: 'handToHole' },
+    { art: 'armIn', sfx: 'whoosh' },
+    { art: 'holeClose' },
+    { art: 'black', t: 200, auto: 1300 },
+    { art: 'noteFromHole', sfx: 'paper' },
+    { art: 'creepyHand', sfx: 'sting' },
+    { art: 'gotTorch', bat: 21, type: { t: 'Parabéns, você possui uma lanterna', col: '#111', y: 12 } },
+    { art: 'holesClosed', type: { t: 'Os buracos se fecharam.', col: '#111', y: 13 } },
+    { art: 'turnPan', t: 300 },
+    { art: 'roomDoor', t: 300 },
+    { art: 'roomDoorKnock', t: 0, sfx: 'knock', choice: { q: '?', opts: [['Abrir a porta', 78, 'abrir2'], ['Ignorar a batida', 22]] } },
+  ] },
+
+  abrir2: { beats: [
+    { art: 'doorHandTorch', sfx: 'creak' },
+    { art: 'legsDoor', sfx: 'wind', amb: 'forest' },
+    { art: 'legsUp' },
+    { art: 'paperFall', sfx: 'flap' },
+    { art: 'noteObrigado', sfx: 'paper' },
+    { art: 'paperFlap', sfx: 'flap' },
+    { art: 'feetPaper' },
+    { art: 'noteNaoFique', sfx: 'paper' },
+    { art: 'forestNote', choice: { q: '?', opts: [['Ficar no quarto', 14], ['Seguir em frente', 86, 'frente']] } },
+  ] },
+
+  frente: { beats: [
+    { art: 'forest1', sfx: 'steps', bat: 21 },
+    { art: 'forest2', sfx: 'steps', bat: 20 },
+    { art: 'forest3', bat: 19, choice: { q: '?', opts: [['Seguir a trilha vermelha', 58, 'trilha'], ['Ir em direção à luz', 42]] } },
+  ] },
+
+  trilha: { beats: [
+    { art: 'trunksRed', sfx: 'steps', bat: 19 },
+    { art: 'ribbonClose', bat: 18 },
+    { art: 'ribbonDark', sfx: 'steps' },
+    { art: 'ribbonDoorFar' },
+    { art: 'doorRedNear', bat: 17, amb: 'red', choice: { q: '?', opts: [['Entrar com a lanterna ligada', 24], ['Entrar com a lanterna desligada', 72, 'desligada'], ['Voltar por onde veio', 4]] } },
+  ] },
+
+  desligada: { beats: [
+    { art: 'click', t: 0, sfx: 'click' },
+    { art: 'doorRedClose' },
+    { art: 'handRedKnob', sfx: 'knob' },
+    { art: 'handPushRed', sfx: 'creak' },
+    { art: 'doorFalls', sfx: 'fall', auto: 2600 },
+    { art: 'black', t: 600, auto: 1800, amb: 'void' },
+    { art: 'redDot', t: 1200 },
+    { art: 'hunched', t: 1400, say: { t: 'OLÁ.', x: 70, y: 22, s: .9 } },
+    { art: 'hunched', say: { t: 'EU NÃO COSTUMO<br>RECEBER VISITAS...', x: 9, y: 12 } },
+    { art: 'hunched', say: { t: 'OBRIGADO POR APAGAR<br>A SUA LANTERNA,<br>EU NÃO SUPORTO MAIS<br>ESSE TIPO DE LUZ.', x: 48, y: 9 } },
+    { art: 'hunched', choice: { q: '?', opts: [['Quem é você?', 48, 'quem'], ['Onde eu estou?', 8], ['Como eu saio daqui?', 3], ['Por que você não suporta a luz?', 41]] } },
+  ] },
+
+  quem: { beats: [
+    { art: 'hunched', say: { t: 'QUEM SOU EU?<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;HÁ<br>TEMPOS &nbsp; PERDI<br>A RESPOSTA DESSA<br>PERGUNTA.', x: 60, y: 8 } },
+    { art: 'hunched', say: { t: 'NA VERDADE NÃO<br>ME LEMBRO SE<br>ALGUM DIA SOUBE<br>QUEM &nbsp; SOU.', x: 10, y: 14 } },
+    { art: 'hunched', say: { t: 'A MEMÓRIA MAIS<br>ANTIGA QUE TENHO<br>É UMA EM QUE<br>ACORDO EM UM CORREDOR.', x: 54, y: 8 } },
+    { art: 'hunched', auto: 2200 },
+    { art: 'hunched', choice: { q: '...', opts: [['Recentemente acordei em um corredor', 70, 'corredor'], ['Também não lembro quem sou', 30]] } },
+  ] },
+
+  corredor: { beats: [
+    { art: 'hunched', say: { t: 'JÁ NÃO SEI<br>HÁ QUANTAS VIDAS<br>ISSO ACONTECEU-', x: 56, y: 15 } },
+    { art: 'hunched', say: { t: 'ESPERA...', x: 72, y: 22 } },
+    { art: 'hunched', args: { eyes: 1 }, sfx: 'tension', say: { t: 'VOCÊ DISSE<br>QUE ACORDOU EM<br>UM CORREDOR<br>RECENTEMENTE?', x: 8, y: 9 } },
+    { art: 'hunched', args: { eyes: 1 }, say: { t: 'VOCÊ...', x: 16, y: 16 } },
+    { art: 'hunched', args: { eyes: 1 }, say: { t: 'NÃO ME DIGA<br>QUE VOCÊ É UMA<br>RECÉM<br>CHEGADA...', x: 62, y: 12 } },
+    { art: 'hunched', args: { eyes: 1 }, say: { t: 'ISSO É<br>BOM.', x: 34, y: 14 } },
+    { art: 'hunched', args: { eyes: 1 }, say: { t: 'SIGNIFICA QUE<br>VOCÊ AINDA<br>ESTÁ FRESCA.', x: 66, y: 10 } },
+    { art: 'hunched', args: { eyes: 1 }, choice: { q: '?', opts: [['Ligar a lanterna', 81, 'ligar'], ['Fugir no escuro', 19]] } },
+  ] },
+
+  ligar: { beats: [
+    { art: 'hunched', args: { eyes: 1, torch: 1 }, t: 400, bat: 16 },
+    { art: 'hunched', args: { eyes: 1, torch: 1, click: 1 }, t: 0, sfx: 'click', auto: 700 },
+    { art: 'monsters', t: 80, sfx: 'scream', amb: 'chase', flash: true },
+    { art: 'fogRun', sfx: 'run', t: 300 },
+    { art: 'doorTinyFar', sfx: 'run' },
+    { art: 'doorFlat', sfx: 'run' },
+    { art: 'doorBig', t: 300, auto: 1300 },
+    { art: 'ribbonFog', sfx: 'run', amb: 'forest' },
+    { art: 'ribbonFog', args: { tri: 1 }, t: 300 },
+    { art: 'forestRun', sfx: 'run', bat: 15 },
+    { art: 'legsNear', choice: { q: 'O SER QUE TE DIRECIONOU<br>PARA A TOCA VERMELHA', opts: [['Pedir ajuda', 56, 'ajuda'], ['Passar correndo', 40], ['Dar meia volta', 5]] } },
+  ] },
+
+  ajuda: { beats: [
+    { art: 'legsClose', bat: 14 },
+    { art: 'paperFall2', sfx: 'flap' },
+    { art: 'noteFugiu', sfx: 'paper' },
+    { art: 'catchPaper', sfx: 'paper' },
+    { art: 'noteOlhe', sfx: 'paper' },
+    { art: 'legsUp2', bat: 13 },
+    { art: 'face', t: 200, sfx: 'tension' },
+    { art: 'faceNote' },
+    { art: 'faceLunge', t: 0, sfx: 'scream', auto: 900 },
+    { art: 'redFlesh', t: 120, sfx: 'gulp', auto: 1800 },
+    { art: 'black', t: 900, auto: 2200, amb: 'void' },
+    { art: 'blurLight', t: 1200, auto: 2600 },
+    { art: 'corridorEnd', t: 1600, end: true, amb: 'room' },
+  ] },
+};
+const NODE_ORDER = Object.keys(STORY);
+
+/* ============================================================
+   DESTINO — motor: quadros, transições, texto, escolhas e som
+   ============================================================ */
+'use strict';
+const NS = 'http://www.w3.org/2000/svg';
+const $ = s => document.querySelector(s);
+const layersEl = $('#layers'), typeEl = $('#type'), sayEl = $('#say'), hintEl = $('#hint'),
+  choiceEl = $('#choice'), stageEl = $('#stage'), flashEl = $('#flash'), cycleEl = $('#cycle');
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const G = { node: 'inicio', i: 0, cycle: 1, ready: false, typing: null, timer: null, lastArt: null, started: false };
+const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+const roman = n => ROMAN[n] || String(n);
+
+/* ---------------- som (tudo sintetizado) ---------------- */
+const SND = {
+  ctx: null, on: true, master: null, amb: null, ambName: null,
+  init() {
+    if (this.ctx) return;
+    try {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.master = this.ctx.createGain(); this.master.gain.value = .9; this.master.connect(this.ctx.destination);
+      const len = this.ctx.sampleRate * 2, buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate), d = buf.getChannelData(0);
+      let last = 0; for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + .02 * w) / 1.02; d[i] = last * 3.5; }
+      this.brown = buf;
+      const b2 = this.ctx.createBuffer(1, len, this.ctx.sampleRate), d2 = b2.getChannelData(0);
+      for (let i = 0; i < len; i++) d2[i] = Math.random() * 2 - 1;
+      this.white = b2;
+    } catch (e) { this.ctx = null; }
+  },
+  noise(buf, dur, f, q, g, type = 'bandpass', t0 = 0, f2) {
+    if (!this.ctx || !this.on) return;
+    const c = this.ctx, t = c.currentTime + t0, src = c.createBufferSource(), fl = c.createBiquadFilter(), gn = c.createGain();
+    src.buffer = buf; src.loop = true; fl.type = type; fl.frequency.setValueAtTime(f, t); if (f2) fl.frequency.exponentialRampToValueAtTime(f2, t + dur); fl.Q.value = q;
+    gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(g, t + Math.min(.02, dur / 4)); gn.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    src.connect(fl); fl.connect(gn); gn.connect(this.master); src.start(t, Math.random()); src.stop(t + dur + .05);
+  },
+  tone(f, dur, g, type = 'sine', t0 = 0, f2) {
+    if (!this.ctx || !this.on) return;
+    const c = this.ctx, t = c.currentTime + t0, o = c.createOscillator(), gn = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    gn.gain.setValueAtTime(0, t); gn.gain.linearRampToValueAtTime(g, t + .01); gn.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(gn); gn.connect(this.master); o.start(t); o.stop(t + dur + .05);
+  },
+  play(n) {
+    if (!this.ctx || !this.on) return;
+    const W_ = this.white, B = this.brown;
+    switch (n) {
+      case 'type': this.noise(W_, .03, 2400, 1.5, .05, 'bandpass'); break;
+      case 'click': this.noise(W_, .025, 3000, 2, .35, 'highpass'); this.noise(W_, .04, 900, 3, .2, 'bandpass', .05); break;
+      case 'knock': [0, .32].forEach(t => { this.tone(110, .18, .7, 'sine', t, 60); this.noise(B, .12, 400, 1, .6, 'lowpass', t); }); break;
+      case 'paper': this.noise(W_, .25, 3500, .7, .08, 'bandpass'); this.noise(W_, .18, 5000, .7, .06, 'bandpass', .2); break;
+      case 'flap': this.noise(W_, .35, 600, .8, .18, 'bandpass', 0, 2500); break;
+      case 'whoosh': this.noise(W_, .7, 300, .7, .2, 'bandpass', 0, 1800); break;
+      case 'knob': this.noise(W_, .06, 1800, 4, .2); this.noise(W_, .08, 1200, 5, .18, 'bandpass', .12); break;
+      case 'creak': this.tone(70, 1.1, .08, 'sawtooth', 0, 95); this.tone(140, 1, .03, 'sawtooth', .05, 120); break;
+      case 'steps': [0, .45, .9].forEach(t => this.noise(B, .12, 300, 1, .35, 'lowpass', t)); break;
+      case 'run': for (let k = 0; k < 6; k++) this.noise(B, .1, 380, 1, .45, 'lowpass', k * .22); this.noise(W_, 1.4, 900, .4, .05, 'bandpass'); break;
+      case 'wind': this.noise(W_, 3, 500, .5, .07, 'bandpass', 0, 900); break;
+      case 'fall': this.noise(B, 1.6, 200, .8, .25, 'lowpass', 0, 80); this.tone(55, 1.2, .3, 'sine', 1.2, 35); break;
+      case 'sting': [233, 247, 349].forEach((f, k) => this.tone(f, 2.2, .05, 'sawtooth', k * .04)); this.noise(W_, 1.6, 3000, 2, .06, 'bandpass'); break;
+      case 'tension': this.tone(48, 3.5, .25, 'sine'); this.tone(51, 3.5, .18, 'sine'); break;
+      case 'scream': [196, 207, 293, 311].forEach((f, k) => this.tone(f, 1.6, .09, 'sawtooth', 0, f * .7)); this.noise(W_, 1.4, 1500, 1, .35, 'bandpass', 0, 600); break;
+      case 'gulp': this.tone(120, 1.4, .5, 'sine', 0, 30); this.noise(B, 1.4, 300, 1, .5, 'lowpass', 0, 60); break;
+    }
+  },
+  ambience(name) {
+    if (!this.ctx || name === this.ambName) return;
+    this.ambName = name;
+    const c = this.ctx, t = c.currentTime;
+    if (this.amb) { const old = this.amb; old.g.gain.setTargetAtTime(0, t, .6); setTimeout(() => old.stop(), 3000); this.amb = null; }
+    if (!name || !this.on) return;
+    const g = c.createGain(); g.gain.value = 0; g.connect(this.master);
+    const nodes = [];
+    const src = c.createBufferSource(); src.buffer = this.brown; src.loop = true;
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass';
+    const cfg = { room: [160, .25, 0], dark: [110, .4, 41], forest: [700, .3, 0], red: [90, .45, 36.7], void: [70, .5, 30.9], chase: [240, .5, 46.2] }[name] || [150, .3, 0];
+    lp.frequency.value = cfg[0]; src.connect(lp); lp.connect(g); src.start(); nodes.push(src);
+    if (cfg[2]) { const o = c.createOscillator(), og = c.createGain(); o.type = 'sine'; o.frequency.value = cfg[2]; og.gain.value = .35; o.connect(og); og.connect(g); o.start(); nodes.push(o);
+      const o2 = c.createOscillator(); o2.type = 'sine'; o2.frequency.value = cfg[2] * 1.505; const og2 = c.createGain(); og2.gain.value = .08; o2.connect(og2); og2.connect(g); o2.start(); nodes.push(o2); }
+    if (name === 'forest') { const lfo = c.createOscillator(), lg = c.createGain(); lfo.frequency.value = .08; lg.gain.value = 300; lfo.connect(lg); lg.connect(lp.frequency); lfo.start(); nodes.push(lfo); }
+    g.gain.setTargetAtTime(cfg[1], t, 1.2);
+    this.amb = { g, stop: () => nodes.forEach(n => { try { n.stop(); } catch (e) { } }) };
+  },
+  toggle() {
+    this.on = !this.on;
+    const name = this.ambName; this.ambName = null;
+    if (this.on) this.ambience(name); else if (this.amb) { this.amb.g.gain.setTargetAtTime(0, this.ctx.currentTime, .2); this.ambName = name; }
+    if (!this.on) this.ambName = name;
+    return this.on;
+  }
+};
+
+/* ---------------- quadros ---------------- */
+function beat() { return STORY[G.node].beats[G.i]; }
+
+function renderArt(b) {
+  if (b.bat != null) CTX.bat = b.bat;
+  const key = b.art + JSON.stringify(b.args || {}) + CTX.bat;
+  if (key === G.lastArt) return;
+  G.lastArt = key;
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+  svg.setAttribute('class', 'layer');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.innerHTML = ART[b.art](b.args || {});
+  const dur = reduce ? 0 : (b.t ?? 1000);
+  svg.style.transition = `opacity ${dur}ms ease`;
+  svg.style.opacity = dur ? 0 : 1;
+  layersEl.appendChild(svg);
+  try { svg.setCurrentTime(0); } catch (e) { }
+  const olds = [...layersEl.children].filter(n => n !== svg);
+  if (dur) requestAnimationFrame(() => requestAnimationFrame(() => { svg.style.opacity = 1; }));
+  setTimeout(() => olds.forEach(n => n.remove()), dur + 60);
+}
+
+function typeText(spec) {
+  typeEl.hidden = false; typeEl.style.color = spec.col || '#111'; typeEl.style.top = (spec.y ?? 40) + '%';
+  const full = spec.t; let k = 0;
+  typeEl.innerHTML = '<span class="txt"></span><span class="caret"></span>';
+  const span = typeEl.querySelector('.txt');
+  return new Promise(res => {
+    const step = () => {
+      k++; span.textContent = full.slice(0, k);
+      if (full[k - 1] && full[k - 1] !== ' ') SND.play('type');
+      if (k >= full.length) { G.typing = null; res(); return; }
+      G.typing = { t: setTimeout(step, 55 + Math.random() * 40), finish() { clearTimeout(this.t); span.textContent = full; G.typing = null; res(); } };
+    };
+    G.typing = { t: setTimeout(step, 500), finish() { clearTimeout(this.t); span.textContent = full; G.typing = null; res(); } };
+  });
+}
+
+function showSay(spec) {
+  sayEl.innerHTML = spec.t;
+  sayEl.style.left = spec.x + '%'; sayEl.style.top = spec.y + '%';
+  sayEl.style.fontSize = `calc(${spec.s || 1} * var(--say-size))`;
+  sayEl.hidden = false;
+  sayEl.classList.remove('in'); void sayEl.offsetWidth; sayEl.classList.add('in');
+  // mantém a fala dentro do quadro
+  const st = stageEl.getBoundingClientRect(), r = sayEl.getBoundingClientRect(), m = st.width * .04;
+  if (r.right > st.right - m) sayEl.style.left = Math.max(4, ((st.right - m - r.width) - st.left) / st.width * 100) + '%';
+}
+
+function play() {
+  clearTimeout(G.timer); G.ready = false;
+  hintEl.classList.remove('on');
+  const b = beat();
+  if (b.amb) SND.ambience(b.amb);
+  renderArt(b);
+  if (b.sfx) setTimeout(() => SND.play(b.sfx), Math.min(250, b.t ?? 700));
+  if (b.flash && !reduce) { flashEl.classList.remove('go'); void flashEl.offsetWidth; flashEl.classList.add('go'); }
+  if (b.shake && !reduce) { stageEl.classList.remove('shake'); void stageEl.offsetWidth; stageEl.classList.add('shake'); }
+  typeEl.hidden = !b.type; if (!b.type) typeEl.innerHTML = '';
+  if (b.say) showSay(b.say); else { sayEl.hidden = true; sayEl.innerHTML = ''; }
+  hideChoice();
+  const typed = b.type ? typeText(b.type) : Promise.resolve();
+  const settle = Math.max(450, (b.t ?? 700) * .8);
+  typed.then(() => {
+    setTimeout(() => {
+      if (beat() !== b) return;
+      G.ready = true;
+      if (b.choice) showChoice(b.choice);
+      else if (!b.end) G.timer = setTimeout(advance, Math.max(300, autoTime(b) - settle));
+    }, b.choice ? settle + 500 : settle);
+  });
+  if (b.end) { G.timer = setTimeout(endCycle, 4200); }
+  snapshot();
+}
+
+/* cada quadro segue sozinho: tempo de leitura + tempo da animação */
+function autoTime(b) {
+  if (b.auto) return b.auto;
+  const txt = (b.say ? b.say.t : '').replace(/<[^>]+>|&nbsp;/g, ' ').trim();
+  if (txt) return 2200 + txt.length * 70;
+  if (b.type) return 2600;
+  return 3000;
+}
+
+function advance() {
+  if (!G.started) return;
+  const b = beat();
+  if (G.typing) { G.typing.finish(); return; }
+  if (!G.ready || b.choice || b.end) return;
+  if (G.i < STORY[G.node].beats.length - 1) { G.i++; play(); }
+}
+
+function goNode(name) { G.node = name; G.i = 0; play(); }
+
+function endCycle() {
+  G.cycle++;
+  cycleEl.querySelector('b').textContent = roman(G.cycle);
+  const card = $('#cycleCard');
+  card.querySelector('.n').textContent = 'Ciclo ' + roman(G.cycle);
+  card.hidden = false; card.classList.remove('go'); void card.offsetWidth; card.classList.add('go');
+  setTimeout(() => { card.hidden = true; CTX.bat = 21; goNode('inicio'); }, 4200);
+}
+
+/* ---------------- escolhas a lápis ---------------- */
+const BOX = '<svg viewBox="0 0 40 40" class="box" aria-hidden="true"><path d="M5,7 C14,5 27,6 35,5 C36,15 35,26 36,35 C26,36 15,35 5,36 C4,26 6,16 5,7" /><path class="tick" d="M10,20 L18,29 L33,6" /></svg>';
+function showChoice(c) {
+  const opts = c.opts.map((o, k) => {
+    const [label, pct, go] = o, open = !!go;
+    return `<li><button type="button" id="opt-${G.node}-${k}" class="opt ${open ? 'open' : 'locked'}" data-k="${k}" ${open ? '' : 'aria-disabled="true"'}
+      aria-label="${label.replace(/<[^>]+>/g, ' ')} — ${pct}%${open ? '' : ' — caminho ainda não desenhado'}">
+      ${BOX}<span class="lbl">${label}</span><span class="pct">${pct}%</span>
+      ${open ? '<svg class="under" viewBox="0 0 200 10" preserveAspectRatio="none" aria-hidden="true"><path d="M2,6 C50,3 120,8 198,4"/></svg>' : '<svg class="strike" viewBox="0 0 200 20" preserveAspectRatio="none" aria-hidden="true"><path d="M2,12 C40,8 70,14 110,9 C140,6 170,12 198,8"/></svg>'}
+    </button></li>`;
+  }).join('');
+  choiceEl.innerHTML = `<div class="q">${c.q}</div><ol>${opts}</ol><p class="foot" aria-live="polite">os outros caminhos ainda não foram desenhados</p>`;
+  choiceEl.hidden = false;
+  choiceEl.classList.remove('in', 'out'); void choiceEl.offsetWidth; choiceEl.classList.add('in');
+  choiceEl.querySelectorAll('.opt').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); pick(c, +btn.dataset.k, btn); }));
+  G.choiceAt = performance.now();
+}
+function hideChoice() { choiceEl.hidden = true; choiceEl.innerHTML = ''; choiceEl.classList.remove('in', 'out'); }
+function pick(c, k, btn) {
+  if (!G.ready || !btn || performance.now() - (G.choiceAt || 0) < 700) return;
+  const o = c.opts[k];
+  if (!o[2]) {
+    btn.classList.remove('nope'); void btn.offsetWidth; btn.classList.add('nope');
+    const f = choiceEl.querySelector('.foot'); f.textContent = 'esse caminho ainda não foi desenhado'; f.classList.add('warn');
+    SND.play('paper'); return;
+  }
+  G.ready = false;
+  btn.classList.add('picked'); SND.play('paper');
+  setTimeout(() => { choiceEl.classList.add('out'); }, 650);
+  setTimeout(() => goNode(o[2]), 1100);
+}
+
+/* ---------------- entrada ---------------- */
+stageEl.addEventListener('click', e => { if (e.target.closest('#choice') || e.target.closest('.hud')) return; advance(); });
+document.addEventListener('keydown', e => {
+  if (!G.started) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); start(); } return; }
+  if (e.target.closest && e.target.closest('.opt') && (e.key === 'Enter' || e.key === ' ')) return;
+  if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); advance(); }
+  const n = parseInt(e.key, 10); const b = beat();
+  if (n && b.choice && !choiceEl.hidden && b.choice.opts[n - 1]) { const btn = choiceEl.querySelector(`[data-k="${n - 1}"]`); pick(b.choice, n - 1, btn); }
+});
+$('#snd').addEventListener('click', e => { e.stopPropagation(); SND.init(); const on = SND.toggle(); e.currentTarget.setAttribute('aria-pressed', on); e.currentTarget.querySelector('span').textContent = on ? 'som' : 'mudo'; });
+$('#restart').addEventListener('click', e => { e.stopPropagation(); if (!G.started) return; clearTimeout(G.timer); if (G.typing) G.typing.finish(); CTX.bat = 21; G.lastArt = null; goNode('inicio'); });
+
+function start() {
+  if (G.started) return;
+  G.started = true; SND.init(); if (SND.ctx && SND.ctx.state === 'suspended') SND.ctx.resume();
+  $('#title').classList.add('gone'); setTimeout(() => $('#title').hidden = true, 900);
+  play();
+}
+$('#begin').addEventListener('click', e => { e.stopPropagation(); start(); });
+
+/* atualização ao vivo do artifact: mantém o ponto da história */
+function snapshot() { try { window.claude?.hot?.snapshot?.(() => ({ node: G.node, i: G.i, cycle: G.cycle, bat: CTX.bat, started: G.started })); } catch (e) { } }
+function boot(d = {}) {
+  if (d && d.started && STORY[d.node]) {
+    G.node = d.node; G.i = d.i || 0; G.cycle = d.cycle || 1; CTX.bat = d.bat ?? 21;
+    cycleEl.querySelector('b').textContent = roman(G.cycle);
+    G.started = true; $('#title').hidden = true; play();
+  } else {
+    renderArt({ art: 'redTitle', t: 0 });
+  }
+}
+const _q = new URLSearchParams(location.search);
+if (_q.get('n') && STORY[_q.get('n')]) boot({ started: true, node: _q.get('n'), i: +(_q.get('i') || 0), bat: +(_q.get('bat') || 21) });
+else window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
+
+/* grão de filme animado */
+(function grain() {
+  try {
+    const c = document.createElement('canvas'); c.width = c.height = 180;
+    const x = c.getContext('2d'), im = x.createImageData(180, 180);
+    for (let i = 0; i < im.data.length; i += 4) { const v = Math.random() * 255; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; }
+    x.putImageData(im, 0, 0);
+    document.querySelector('.grain').style.backgroundImage = `url(${c.toDataURL()})`;
+  } catch (e) { }
+})();
+
+</script>
