@@ -436,7 +436,7 @@ function nail(x, y, rot, s = 1, fill = '#fbfbfb') {
 /* ---------- a lanterna na mão (o HUD do jogador) ---------- */
 function torch(o = {}) {
   const bat = o.bat ?? CTX.bat;
-  const x = o.x ?? 560, y = o.y ?? 930, rot = o.rot ?? -14, s = o.s ?? 1.08;
+  const x = o.x ?? 560, y = o.y ?? 800, rot = o.rot ?? -14, s = o.s ?? 1;
   const dim = o.dim ?? 0;                 // 0 = iluminado, 1 = na escuridão total
   const lerp = (a, b) => {               // mistura de cinzas
     const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
@@ -448,7 +448,7 @@ function torch(o = {}) {
   const d1 = lerp('#2e2e2e', '#111111'), d2 = lerp('#454545', '#181818'), d3 = lerp('#5d5d5d', '#1e1e1e');
   const lineCol = o.redline ? '#5a0d0a' : INK;
   const caseParts = [
-    { d: 'M-48,140 L48,140 L52,600 L-52,600 Z', c: d1 },
+    { d: 'M-48,140 L48,140 L52,420 Q52,462 0,462 Q-52,462 -52,420 Z', c: d1 },  // cabo curto: a ponta aparece abaixo dos dedos
     { d: 'M-72,92 L72,92 L50,152 L-50,152 Z', c: d1 },
     { d: 'M-98,0 L98,0 L98,72 A98,36 0 0 1 -98,72 Z', c: d1 },
   ];
@@ -467,11 +467,17 @@ function torch(o = {}) {
   g += `<ellipse cx="0" cy="0" rx="98" ry="36" fill="${d2}" stroke="${lineCol}" stroke-width="5" filter="url(#ink)"/>`;
   g += `<ellipse cx="-6" cy="-3" rx="74" ry="24" fill="${d3}" opacity=".55"/>`;
   g += `<path d="M-92,14 Q-90,52 -70,70" stroke="${d3}" stroke-width="7" fill="none" opacity=".8"/>`;
-  g += `<path d="M-40,170 L-40,560" stroke="${d3}" stroke-width="9" opacity=".6"/>`;
+  g += `<path d="M-40,170 L-40,430" stroke="${d3}" stroke-width="9" opacity=".6"/>`;
   // visor de bateria
   g += `<g transform="translate(-6 46) rotate(3)"><rect x="-31" y="-15" width="62" height="30" rx="4" fill="${lerp('#161616', '#0a0a0a')}" stroke="${lerp('#777777', '#222222')}" stroke-width="2"/>
         <text x="0" y="8" text-anchor="middle" font-family="Courier Prime, Courier New, monospace" font-weight="700" font-size="22" fill="${lerp('#e8e8e8', '#5a5a5a')}">${bat}%</text></g>`;
   g += `<rect x="-14" y="200" width="22" height="46" rx="10" fill="${lerp('#1a1a1a', '#0c0c0c')}" stroke="${d3}" stroke-width="2"/>`;
+  // a mão: polegar logo abaixo da cabeça, dedos envolvendo o cabo pela frente
+  // dedos um a um (o contorno os separa), depois o dorso cobrindo a base; um só filtro para a mão toda
+  g += `<g filter="url(#ink)">${fingers.map(f => body([f], skin, 4.5, lineCol, false)).reverse().join('')}${body([...hand, ...thumb], skin, 4.5, lineCol, false)}</g>`;
+  g += `<path d="M150,330 Q210,420 250,520 M120,380 Q170,470 200,560" stroke="${shade}" stroke-width="5" fill="none" opacity=".7"/>`;
+  [[-62, 212], [-64, 258], [-62, 303], [-54, 346]].forEach(([nx, ny]) => g += nail(nx + 8, ny, 90, .95, lerp('#fbfbfb', '#444444')));
+  g += nail(-2, 160, 90, 1, lerp('#fbfbfb', '#444444'));
   return `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s})">${g}</g>`;
 }
 
@@ -943,7 +949,7 @@ ART.gotTorch = () => {
   s += paper(650, 400, 170, 210, 3, ['você fez a escolha', 'certa não olhando', 'para trás', '', 'regra número 1:', 'se você olhar para', 'ele você morre.'], { fs: 14, lh: 19, pin: true, shadowOp: .1 });
   s += holeJagged(300, 640, 92, { n: 14, redRim: true });
   s += `<rect x="200" y="540" width="200" height="200" fill="url(#holeShade)"/>`;
-  s += torch({ x: 280, y: 860, rot: -20, s: 1.7 });
+  s += torch({ x: 300, y: 820, rot: -20, s: 1.3 });
   return s;
 };
 

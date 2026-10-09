@@ -523,6 +523,11 @@ function torch(o = {}) {
   g += `<g transform="translate(-6 46) rotate(3)"><rect x="-31" y="-15" width="62" height="30" rx="4" fill="${lerp('#161616', '#0a0a0a')}" stroke="${lerp('#777777', '#222222')}" stroke-width="2"/>
         <text x="0" y="8" text-anchor="middle" font-family="Courier Prime, Courier New, monospace" font-weight="700" font-size="22" fill="${lerp('#e8e8e8', '#5a5a5a')}">${bat}%</text></g>`;
   g += `<rect x="-14" y="200" width="22" height="46" rx="10" fill="${lerp('#1a1a1a', '#0c0c0c')}" stroke="${d3}" stroke-width="2"/>`;
+  // a mão: polegar logo abaixo da cabeça, dedos envolvendo o cabo pela frente
+  g += body([...hand, ...thumb, ...fingers], skin, 4.5, lineCol);
+  g += `<path d="M150,330 Q210,420 250,520 M120,380 Q170,470 200,560" stroke="${shade}" stroke-width="5" fill="none" opacity=".7"/>`;
+  [[-62, 212], [-64, 258], [-62, 303], [-54, 346]].forEach(([nx, ny]) => g += nail(nx + 8, ny, 90, .95, lerp('#fbfbfb', '#444444')));
+  g += nail(-2, 160, 90, 1, lerp('#fbfbfb', '#444444'));
   return `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s})">${g}</g>`;
 }
 
@@ -1900,13 +1905,16 @@ function sculptHand() {
     { t: 'c', a: [.07, -.07, .022], b: [.06, -.13, .02], r1: .003, sub: 1, k: .004 },                    // tendões
   ];
   const sdfHand = makeSDF(P, { noise: 0 });
-  // a lanterna é escavada da mão para os dedos assentarem nela
-  const sdf = (x, y, z) => SC.smax(sdfHand(x, y, z), -(Math.hypot(x, z) - .027), .004);
+  // a mão sobe até o polegar encostar sob a cabeça, como nos quadros; a lanterna é escavada dela para os dedos assentarem
+  const up = .046;
+  const sdf = (x, y, z) => SC.smax(sdfHand(x, y - up, z), -(Math.hypot(x, z) - .027), .004);
   const g = new T3.Group();
-  const hand = meshSDF(sdf, [-.05, -.37, -.075], [.15, .0, .095], .0034, 0xeae6e0, 0x3a3734);
+  const hand = meshSDF(sdf, [-.05, -.37 + up, -.075], [.15, up, .095], .0034, 0xeae6e0, 0x3a3734);
   g.add(hand);
   const dark = M(0x2b2b2b), darker = M(0x1d1d1d);
-  const body = new T3.Mesh(new T3.CylinderGeometry(.026, .026, .24, 20), dark); body.position.y = -.1; g.add(body);
+  // cabo curto: só a ponta arredondada aparece abaixo dos dedos
+  const body = new T3.Mesh(new T3.CylinderGeometry(.026, .026, .14, 20), dark); body.position.y = -.05; g.add(body);
+  const butt = new T3.Mesh(new T3.SphereGeometry(.026, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), dark); butt.position.y = -.12; g.add(butt);
   const neck = new T3.Mesh(new T3.CylinderGeometry(.042, .028, .04, 20), dark); neck.position.y = .04; g.add(neck);
   const head = new T3.Mesh(new T3.CylinderGeometry(.05, .046, .055, 24), darker); head.position.y = .085; g.add(head);
   const lens = new T3.Mesh(new T3.CircleGeometry(.044, 24), M(0x3c3c3c)); lens.rotation.x = -Math.PI / 2; lens.position.y = .1126; g.add(lens);
