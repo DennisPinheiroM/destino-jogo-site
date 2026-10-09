@@ -2176,12 +2176,13 @@ function buildWorld() {
   const paint = new T3.Mesh(new T3.CircleGeometry(.16, 14), red); paint.rotation.x = -Math.PI / 2; paint.position.set(2.3, .33, -8.05); C.add(paint);
   // porta no braço vermelho (caminho não desenhado)
   OBJ.oldDoor = box(1, 2.1, .06, M(0x8a8a8a), 7.2, 1.05, -9.99, C);
-  box(.06, .14, .02, M(0xe6e6e6), 7.58, 1.0, -9.95, C);
+  OBJ.oldKnob = box(.06, .14, .02, M(0xe6e6e6), 7.58, 1.0, -9.95, C);
   // a porta nova (aparece no caminho da chave): mais escura, moldura vermelha, fechadura grande
   const ND = new T3.Group(); ND.position.set(8.4, 0, -9.99); C.add(ND); OBJ.newDoor = ND; ND.visible = false;
-  box(1, 2.1, .06, M(0x5e5e5e), 0, 1.05, 0, ND);
+  const ndLeaf = box(1, 2.1, .06, M(0x5e5e5e), 0, 1.05, 0, ND);
   box(.05, 2.22, .03, red, -.58, 1.1, .03, ND).rotation.z = .02; box(.05, 2.22, .03, red, .58, 1.1, .03, ND).rotation.z = -.015; box(1.2, .05, .03, red, 0, 2.2, .03, ND).rotation.z = .01;
-  box(.08, .2, .02, M(0x3a3a3a), .36, 1.0, .04, ND); const kg = plane(.025, .06, MB(0xffffff), .36, .97, .052, 0, 0, ND); overlayOnly(kg);
+  const ndKnob = box(.08, .2, .02, M(0x3a3a3a), .36, 1.0, .04, ND); const kg = plane(.025, .06, MB(0xffffff), .36, .97, .052, 0, 0, ND); overlayOnly(kg);
+  OBJ.newDoorParts = [ndLeaf, ndKnob, kg];
 
   /* -- 2. a sala escura com luz sob a porta -- */
   const D = new T3.Group(); D.position.set(60, 0, 0); scene.add(D); OBJ.dark = D;
@@ -2486,6 +2487,313 @@ function render3d(now) {
 }
 
 /* ============================================================
+   DESTINO 3D — as duas portas do caminho da chave
+   Porta trancada: a sala dos espelhos (e, pelo portal, o avesso
+   da parede dos buracos). Porta nova: o elevador e seus três
+   andares (o arquivo, o quarto, o andar inundado).
+   Cada lugar só fica visível enquanto está em cena (fx 'place'),
+   para não somar luzes ao resto do mundo.
+   ============================================================ */
+'use strict';
+const PLACE = {};                                        // lugares novos, por nome
+const CAB = {};                                          // cabines do elevador, por andar
+const FLOODZ = [16, 11, 6.5];                            // o vulto do andar inundado, a cada apagar
+
+function buildPortas() {
+  _r = 4242;
+  const decal = t => M(0xffffff, { map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+  const ink = M(0x2a2a2a), red = M(0xc3120c, { emissive: 0x3a0000 });
+  TEX.sheet = ctex(256, 512, (x, w, h) => {
+    x.fillStyle = '#e9e9e6'; x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 26; i++) { const px = R(0, w), g = x.createLinearGradient(px - 14, 0, px + 14, 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(.5, `rgba(0,0,0,${R(.06, .18)})`); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(px - 14, R(0, h * .3), 28, h); }
+  });
+  TEX.dial = ctex(256, 128, (x) => { x.strokeStyle = '#1a1a1a'; x.lineWidth = 5; x.beginPath(); x.arc(128, 120, 96, Math.PI, 0); x.stroke(); [-.7, 0, .7].forEach(a => wobLine(x, [[128 + Math.sin(a) * 80, 120 - Math.cos(a) * 80], [128 + Math.sin(a) * 100, 120 - Math.cos(a) * 100]], .5)); });
+  TEX.smudge = ctex(64, 64, (x) => { x.fillStyle = 'rgba(195,18,12,.85)'; for (let k = 0; k < 7; k++) { x.beginPath(); x.ellipse(32 + R(-6, 6), 32 + R(-6, 6), R(6, 14), R(8, 16), R(0, 3), 0, 7); x.fill(); } });
+  const body = OBJ.collector.children[0].geometry;          // o corpo magro do Recolhedor serve de molde
+
+  /* ---------- portas do corredor vermelho, abrindo ---------- */
+  const C = OBJ.corr;
+  const oldLeaf = new T3.Group(); oldLeaf.position.set(6.7, 0, -9.99); C.add(oldLeaf); OBJ.oldLeaf = oldLeaf; oldLeaf.visible = false;
+  box(1, 2.1, .06, M(0x8a8a8a), .5, 1.05, 0, oldLeaf); box(.06, .14, .02, M(0xe6e6e6), .88, 1.0, .04, oldLeaf);
+  OBJ.oldDark = plane(1, 2.1, MB(0x050505), 7.2, 1.05, -10, 0, 0, C); OBJ.oldDark.visible = false;
+  const newLeaf = new T3.Group(); newLeaf.position.set(-.5, 0, 0); OBJ.newDoor.add(newLeaf); OBJ.newLeaf = newLeaf; newLeaf.visible = false;
+  box(1, 2.1, .06, M(0x5e5e5e), .5, 1.05, 0, newLeaf); box(.08, .2, .02, M(0x3a3a3a), .86, 1.0, .04, newLeaf);
+  OBJ.newDark = plane(1, 2.1, MB(0x050505), 0, 1.05, -.01, 0, 0, OBJ.newDoor); OBJ.newDark.visible = false;
+
+  /* ---------- 1. a sala dos espelhos (x = 180) ----------
+     4 × 5 m. Espelho descoberto no fundo (z = −2,5) e outro, coberto, na parede direita (x = 2).
+     O que se vê nos espelhos é a sala construída de novo, espelhada, atrás de cada um. */
+  const MR = new T3.Group(); MR.position.set(180, 0, 0); scene.add(MR); PLACE.mirror = MR;
+  const room = (g, o) => {
+    const wm = M(o.refl ? 0x9a9a98 : 0xb4b4b0, { map: TEX.plaster }), fl = M(0x8e8e8a, { map: TEX.floor });
+    plane(4, 5, fl, 0, 0, 0, -Math.PI / 2, 0, g); plane(4, 5, M(0xa8a8a4), 0, 2.7, 0, Math.PI / 2, 0, g);
+    box(.1, 2.7, 5, wm, -2.05, 1.35, 0, g); box(4.2, 2.7, .1, wm, 0, 1.35, 2.55, g);
+    if (o.back) { box(1.5, 2.7, .1, wm, -1.3, 1.35, -2.55, g); box(1.5, 2.7, .1, wm, 1.3, 1.35, -2.55, g); box(1.1, .3, .1, wm, 0, .15, -2.55, g); box(1.1, .5, .1, wm, 0, 2.45, -2.55, g); }
+    else if (!o.skipBack) box(4.2, 2.7, .1, wm, 0, 1.35, -2.55, g);
+    if (o.right) { box(.1, 2.7, 1.1, wm, 2.05, 1.35, -1.95, g); box(.1, 2.7, 2.9, wm, 2.05, 1.35, 1.05, g); box(.1, .3, 1, wm, 2.05, .15, -.9, g); box(.1, .5, 1, wm, 2.05, 2.45, -.9, g); }
+    else if (!o.skipRight) box(.1, 2.7, 5, wm, 2.05, 1.35, 0, g);
+    // molduras dos espelhos (no reflexo, os espelhos estão todos descobertos: vidro escuro)
+    const fr = M(0x3a3a38);
+    [[0, -2.49, 0], [1.99, -.9, Math.PI / 2], [-1.99, -1.2, Math.PI / 2], [-1.99, 1.0, Math.PI / 2], [1.99, 1.25, Math.PI / 2]].forEach(([x, z, ry], i) => {
+      const f = new T3.Group(); f.position.set(x, 0, z); f.rotation.y = ry; g.add(f);
+      box(1.12, .06, .06, fr, 0, .27, 0, f); box(1.12, .06, .06, fr, 0, 2.23, 0, f); box(.06, 2, .06, fr, -.53, 1.25, 0, f); box(.06, 2, .06, fr, .53, 1.25, 0, f);
+      if (o.refl && !(i === 0 && o.skipBack) && !(i === 1 && o.skipRight)) plane(1, 1.9, M(0x2c2f30), 0, 1.25, x > 0 ? -.01 : .01, 0, x > 0 ? Math.PI : 0, f);
+    });
+    // a porta de entrada, atrás de quem entra
+    box(1, 2.1, .06, M(0x8a8a8a), 0, 1.05, 2.48, g);
+    // a lâmpada
+    limb(v3(0, 2.7, 0), v3(0, 2.3, 0), .006, ink, g); ball(.06, MB(0xffffff), 0, 2.24, 0, 1, 1.3, 1, g);
+    const L = new T3.PointLight(0xffffff, o.refl ? .9 : 1.1, 6, 1.4); L.position.set(0, 2.1, 0); g.add(L);
+    return L;
+  };
+  OBJ.mirLamp = room(MR, { back: true, right: true });
+  const R1 = new T3.Group(); R1.position.z = -5.1; R1.scale.z = -1; MR.add(R1);             // reflexo do espelho do fundo
+  OBJ.mirLamp1 = room(R1, { refl: true, skipBack: true });
+  const R2 = new T3.Group(); R2.position.x = 4.1; R2.scale.x = -1; MR.add(R2);              // reflexo do espelho da direita
+  room(R2, { refl: true, skipRight: true });
+  // vidros (fora do passe de contorno, para não esconder as linhas do reflexo)
+  OBJ.glassBack = overlayOnly(plane(1, 1.9, MB(0xdfe6e6, { transparent: true, opacity: .08, depthWrite: false }), 0, 1.25, -2.5, 0, 0, MR));
+  overlayOnly(plane(1, 1.9, MB(0xdfe6e6, { transparent: true, opacity: .08, depthWrite: false }), 2.0, 1.25, -.9, 0, -Math.PI / 2, MR));
+  // lençóis: sobre os espelhos laterais; o do fundo está caído no chão
+  const sheetM = M(0xe2e2de, { map: TEX.sheet });
+  const sheet = (x, z, ry) => { const s = new T3.Group(); s.position.set(x, 0, z); s.rotation.y = ry; MR.add(s); box(1.14, 2.05, .05, sheetM, 0, 1.24, 0, s); box(1.2, .14, .12, sheetM, 0, 2.3, .03, s); return s; };
+  sheet(-1.95, -1.2, Math.PI / 2); sheet(-1.95, 1.0, Math.PI / 2); sheet(1.95, 1.25, -Math.PI / 2);
+  OBJ.sheetRight = sheet(1.95, -.9, -Math.PI / 2);
+  OBJ.sheetBack = sheet(0, -2.44, 0); OBJ.sheetBack.visible = false;
+  OBJ.sheetFloor = ball(.4, sheetM, .55, .06, -2.0, 1.3, .16, .9, MR);
+  OBJ.sheetFloor2 = ball(.4, sheetM, 1.65, .06, -.9, .9, .16, 1.3, MR); OBJ.sheetFloor2.visible = false;
+  // luzes do avesso, vistas no fundo do reflexo quando ele escurece
+  OBJ.mirHoles = new T3.Group(); MR.add(OBJ.mirHoles); OBJ.mirHoles.visible = false;
+  [-.7, .7].forEach(dx => { const s = new T3.Sprite(new T3.SpriteMaterial({ map: TEX.glow, color: 0xffffff, transparent: true, depthWrite: false, blending: T3.AdditiveBlending, opacity: .8 })); s.position.set(dx, 1.5, -6.6); s.scale.set(.6, .6, 1); overlayOnly(s); OBJ.mirHoles.add(s); });
+  // a outra: a mesma altura, cabelo escuro, pele de cera, sorriso; espera no reflexo da direita
+  const DB = new T3.Group(); DB.position.set(4.0, 0, -.9); DB.rotation.y = -Math.PI / 2; MR.add(DB); OBJ.double = DB; DB.visible = false;
+  DB.add(new T3.Mesh(body, M(0xd6d4cc)));
+  plane(.15, .075, MB(0xffffff, { map: TEX.grin, transparent: true }), 0, 1.8, .322, -.1, 0, DB);
+  [-.036, .036].forEach(dx => ball(.022, MB(0x050505), dx, 1.9, .3, 1, .8, .5, DB));
+  ball(.105, MB(0x111111), 0, 1.95, .19, 1.08, .85, 1.05, DB);                                  // cabelo escuro, pelas costas e pelos lados
+  for (let i = 0; i < 18; i++) { const a = Math.PI + (i / 17 - .5) * 3.9; box(.016, R(.5, .7), .012, MB(0x111111), Math.sin(a) * .105, 1.68, .2 + Math.cos(a) * .1, DB).rotation.z = Math.sin(a) * .06; }
+  limb(v3(.21, 1.56, .08), v3(.24, 1.02, .1), .032, DB.children[0].material, DB, .028); limb(v3(.24, 1.02, .1), v3(.24, .5, .12), .026, DB.children[0].material, DB, .022);
+
+  /* ---------- 2. o avesso da parede dos buracos (atrás da sala branca) ---------- */
+  const AV = new T3.Group(); OBJ.white.add(AV); PLACE.avesso = AV;
+  const aw = M(0x7a7a78, { map: TEX.plaster });
+  plane(5, 1.5, M(0x5a5a58, { map: TEX.floor }), 0, 0, -3.85, -Math.PI / 2, 0, AV); plane(5, 1.5, aw, 0, 3, -3.85, Math.PI / 2, 0, AV);
+  box(5, 3, .1, aw, 0, 1.5, -4.65, AV); box(.1, 3, 1.5, aw, -2.5, 1.5, -3.85, AV); box(.1, 3, 1.5, aw, 2.5, 1.5, -3.85, AV);
+  plane(5, 3, MB(0x4a4a48, { map: TEX.plaster }), 0, 1.5, -3.13, 0, Math.PI, AV);           // o verso da parede
+  const sh = new T3.Shape(); for (let i = 0; i < 18; i++) { const a = i / 18 * Math.PI * 2, r = (i % 2 ? .15 : .19); i ? sh.lineTo(Math.cos(a) * r, Math.sin(a) * r) : sh.moveTo(r, 0); }
+  OBJ.avQ = overlayOnly(new T3.Mesh(new T3.ShapeGeometry(sh), MB(0xffffff))); OBJ.avQ.position.set(-.7, 1.5, -3.135); OBJ.avQ.rotation.y = Math.PI; AV.add(OBJ.avQ);
+  overlayOnly(plane(.34, .34, MB(0xffffff, { map: TEX.glow, transparent: true }), .7, 1.5, -3.135, 0, Math.PI, AV));
+  const avl = new T3.PointLight(0xffffff, 1.3, 3.4, 1.5); avl.position.set(0, 1.5, -3.4); AV.add(avl);
+  const avl2 = new T3.PointLight(0xffffff, .4, 4, 1.5); avl2.position.set(0, 2.4, -4.3); AV.add(avl2);
+  plane(.6, .6, MB(0x050505), -.7, 1.5, -4.59, 0, 0, AV);                                    // de onde o braço sai
+  ball(.09, M(0x8a8a8a), -.7, 1.5, -4.5, 1, .8, 1, AV);
+
+  /* ---------- 3. o elevador: antessala (x = 240) e uma cabine por andar ---------- */
+  const cabin = (parent, z) => {
+    const g = new T3.Group(); g.position.z = z; parent.add(g);
+    const wm = M(0x6a6a66, { map: TEX.plaster }), dk = M(0x2a2a2a);
+    plane(1.4, 1.4, M(0x4a4a4a, { map: TEX.floor }), 0, .002, 0, -Math.PI / 2, 0, g); plane(1.4, 1.4, M(0x3a3a3a), 0, 2.4, 0, Math.PI / 2, 0, g);
+    box(.06, 2.4, 1.4, wm, -.73, 1.2, 0, g); box(.06, 2.4, 1.4, wm, .73, 1.2, 0, g); box(1.4, 2.4, .06, wm, 0, 1.2, -.73, g);
+    box(.12, 2.4, .08, dk, -.66, 1.2, .72, g); box(.12, 2.4, .08, dk, .66, 1.2, .72, g); box(1.44, .2, .08, dk, 0, 2.3, .72, g);
+    const gr = new T3.Group(); gr.position.set(-.6, 0, .64); g.add(gr);                         // grade sanfonada, presa à esquerda
+    for (let i = 0; i < 9; i++) box(.015, 2.1, .015, dk, i * .15, 1.05, 0, gr);
+    [.1, 1.05, 2.08].forEach(y => box(1.22, .03, .03, dk, .6, y, 0, gr));
+    for (let i = 0; i < 8; i++) { box(.01, .2, .01, dk, i * .15 + .075, .6, 0, gr).rotation.z = .6; box(.01, .2, .01, dk, i * .15 + .075, 1.6, 0, gr).rotation.z = -.6; }
+    const pn = new T3.Group(); pn.position.set(.69, 1.3, .3); pn.rotation.y = -Math.PI / 2; g.add(pn);   // três botões sem número
+    box(.14, .42, .02, M(0x8a8a86), 0, 0, 0, pn);
+    [.12, 0, -.12].forEach(y => { const b = new T3.Mesh(new T3.CylinderGeometry(.026, .026, .02, 14), M(0xe8e8e2)); b.rotation.x = Math.PI / 2; b.position.set(0, y, .02); pn.add(b); });
+    plane(.07, .07, decal(TEX.smudge), .005, -.125, .032, 0, 0, pn);                           // o de baixo tem dedo vermelho
+    ball(.045, MB(0xffffff), 0, 2.33, 0, 1, 1.2, 1, g);
+    const L = new T3.PointLight(0xfff4e8, .8, 3.4, 1.6); L.position.set(0, 2.1, 0); g.add(L);
+    return { g, grate: gr, light: L };
+  };
+  const EL = new T3.Group(); EL.position.set(240, 0, 0); scene.add(EL); PLACE.elevator = EL;
+  { const wm = M(0x4e4e4c, { map: TEX.plaster });
+    plane(3, 3, M(0x3a3a3a, { map: TEX.floor }), 0, 0, 0, -Math.PI / 2, 0, EL); plane(3, 3, M(0x3a3a3a), 0, 2.6, 0, Math.PI / 2, 0, EL);
+    box(.1, 2.6, 3, wm, -1.55, 1.3, 0, EL); box(.1, 2.6, 3, wm, 1.55, 1.3, 0, EL); box(3.2, 2.6, .1, wm, 0, 1.3, 1.55, EL);
+    box(.9, 2.6, .1, wm, -1.1, 1.3, -1.55, EL); box(.9, 2.6, .1, wm, 1.1, 1.3, -1.55, EL); box(1.3, .3, .1, wm, 0, 2.45, -1.55, EL);
+    box(.06, 2.12, .06, M(0x9a9a96), 0, 1.06, 1.49, EL);                                       // a porta por onde entrou, fechada
+    plane(.5, .25, decal(TEX.dial), 0, 2.45, -1.49, 0, 0, EL);
+    const nd = new T3.Group(); nd.position.set(0, 2.33, -1.48); EL.add(nd); OBJ.dialNeedle = nd; box(.008, .19, .006, M(0x151515), 0, .095, 0, nd);
+    ball(.05, MB(0xffffff), 0, 2.55, .3, 1, 1.2, 1, EL);
+    const L = new T3.PointLight(0xffffff, .45, 4.5, 1.6); L.position.set(0, 2.3, .3); EL.add(L); }
+  CAB.elev = cabin(EL, -2.27);
+
+  /* -- andar de cima: o arquivo (x = 360) -- */
+  const AR = new T3.Group(); AR.position.set(360, 0, 0); scene.add(AR); PLACE.cima = AR; CAB.cima = cabin(AR, 0);
+  { const wm = M(0x4a4a48, { map: TEX.plaster });
+    plane(4, 16, M(0x353535, { map: TEX.floor }), 0, 0, 8.6, -Math.PI / 2, 0, AR); plane(4, 16, M(0x2e2e2e), 0, 3.2, 8.6, Math.PI / 2, 0, AR);
+    box(.1, 3.2, 16, wm, -2, 1.6, 8.6, AR); box(.1, 3.2, 16, wm, 2, 1.6, 8.6, AR); box(4, 3.2, .1, wm, 0, 1.6, 16.6, AR); box(1.3, 3.2, .1, wm, -1.35, 1.6, .72, AR); box(1.3, 3.2, .1, wm, 1.35, 1.6, .72, AR); box(1.4, .8, .1, wm, 0, 2.8, .72, AR);
+    const shelfM = M(0x5a5a56), packM = M(0xcfcdc2, { map: TEX.plaster });
+    const packs = [], ties = [];
+    [-1.55, 1.55].forEach(x => {
+      for (let z = 1.6; z < 14.6; z += 1.3) {
+        box(.6, 3, .04, shelfM, x, 1.5, z - .6, AR);
+        for (let y = .3; y < 3; y += .55) { box(.6, .03, 1.2, shelfM, x, y, z, AR); for (let k = 0; k < 4; k++) { const p = [x + R(-.12, .12), y + .09, z - .42 + k * .28 + R(-.04, .04)]; packs.push(p); ties.push(p); } }
+      }
+    });
+    const pk = new T3.InstancedMesh(new T3.BoxGeometry(.32, .14, .22), packM, packs.length), tm = new T3.InstancedMesh(new T3.BoxGeometry(.33, .15, .012), red, ties.length);
+    const m4 = new T3.Matrix4(), q = new T3.Quaternion();
+    packs.forEach((p, i) => { q.setFromAxisAngle(v3(0, 1, 0), R(-.15, .15)); m4.compose(v3(...p), q, v3(1, 1, 1)); pk.setMatrixAt(i, m4); tm.setMatrixAt(i, m4); });
+    AR.add(pk); AR.add(tm);
+    // a mesa com a máquina de escrever, no fim
+    box(1.1, .05, .6, M(0x4a4a46), 0, .76, 15.4, AR); [[-.5, -.25], [.5, -.25], [-.5, .25], [.5, .25]].forEach(([x, z]) => box(.04, .76, .04, M(0x3a3a38), x, .38, 15.4 + z, AR));
+    box(.36, .12, .3, M(0x262626), 0, .85, 15.35, AR); box(.4, .05, .06, M(0x1a1a1a), 0, .93, 15.48, AR);
+    plane(.22, .28, M(0xf1f1ee), 0, 1.06, 15.5, -.25, Math.PI, AR);
+    OBJ.archLamps = [];
+    [15, 11.5, 8, 4.5, 1.6].forEach(z => {
+      const bulb = ball(.05, MB(0xffffff), 0, 3.0, z, 1, 1.2, 1, AR); limb(v3(0, 3.2, z), v3(0, 3.05, z), .005, ink, AR);
+      const L = new T3.PointLight(0xffffff, 1.6, 5.5, 1.1); L.position.set(0, 2.8, z); AR.add(L);
+      OBJ.archLamps.push({ bulb, L });
+    }); }
+
+  /* -- andar do meio: o quarto (x = 420) -- */
+  const QT = new T3.Group(); QT.position.set(420, 0, 0); scene.add(QT); PLACE.meio = QT; CAB.meio = cabin(QT, 0);
+  { const wm = M(0xa8a6a0, { map: TEX.plaster });
+    plane(4, 4, M(0x8c8a84, { map: TEX.floor }), 0, 0, 2.7, -Math.PI / 2, 0, QT); plane(4, 4, M(0xb0aea8), 0, 2.6, 2.7, Math.PI / 2, 0, QT);
+    box(.1, 2.6, 1.0, wm, -2, 1.3, 1.2, QT); box(.1, 2.6, 2.0, wm, -2, 1.3, 3.7, QT); box(.1, .5, 1, wm, -2, 2.35, 2.2, QT);
+    box(.1, 2.6, 4, wm, 2, 1.3, 2.7, QT); box(4, 2.6, .1, wm, 0, 1.3, 4.7, QT);
+    box(1.3, 2.6, .1, wm, -1.35, 1.3, .72, QT); box(1.3, 2.6, .1, wm, 1.35, 1.3, .72, QT); box(1.4, .2, .1, wm, 0, 2.5, .72, QT);
+    const qd = new T3.Group(); qd.position.set(-2, 0, 1.7); QT.add(qd); OBJ.bedDoor = qd;           // a porta do quarto
+    box(.05, 2.1, 1, M(0x8a8680), 0, 1.05, .5, qd); box(.03, .14, .06, M(0xd8d8d2), .03, 1.0, .86, qd);
+    plane(1, 2.1, MB(0x050505), -2.04, 1.05, 2.2, 0, Math.PI / 2, QT);
+    const BH = new T3.Group(); BH.position.set(-2.1, 0, 2.62); QT.add(BH); OBJ.bedHand = BH; BH.visible = false;   // dedos na borda da porta
+    const gm = M(0xcfcfcc);
+    for (let i = 0; i < 4; i++) { const a = v3(-.06, 1.2 - i * .045, -.01), b = v3(.1, 1.18 - i * .05, .02); limb(a, b, .009, gm, BH); const cl = new T3.Mesh(new T3.ConeGeometry(.007, .05, 5), M(0x111111)); cl.position.set(.12, 1.18 - i * .05, .02); cl.rotation.z = -Math.PI / 2; BH.add(cl); }
+    // a cama desfeita, com a forma de alguém que acabou de levantar
+    box(1.1, .4, 2, M(0x5a5854), -1, .2, 3.6, QT); box(1.1, .5, .06, M(0x4a4844), -1, .55, 4.6, QT);
+    box(1.04, .12, 1.95, M(0xdcdad4, { map: TEX.sheet }), -1, .46, 3.6, QT);
+    ball(.25, M(0xe8e6e0), -1, .58, 4.3, 1.5, .4, .7, QT);
+    ball(.3, M(0xc8c6c0, { map: TEX.sheet }), -.95, .55, 3.3, 1.2, .25, 2.6, QT);
+    OBJ.pillowNote = plane(.12, .15, M(0xf1f1ee), -.9, .69, 4.25, -Math.PI / 2, 0, QT); OBJ.pillowNote.rotation.z = .3;
+    box(.4, .5, .4, M(0x5a5854), .1, .25, 4.3, QT);                                               // criado-mudo, copo d'água, relógio parado
+    const cup = new T3.Mesh(new T3.CylinderGeometry(.035, .03, .11, 12), MB(0xdfe6e6, { transparent: true, opacity: .35 })); cup.position.set(.02, .555, 4.25); QT.add(cup);
+    box(.12, .1, .05, M(0x2a2a2a), .18, .55, 4.35, QT);
+    box(1, 1.1, .05, M(0x2a2a2a), 1.97, 1.5, 2.8, QT); plane(.9, 1, MB(0x050505), 1.94, 1.5, 2.8, 0, -Math.PI / 2, QT);   // a janela: preto
+    const L = new T3.PointLight(0xfff0dc, 1.2, 5, 1.2); L.position.set(.1, 1.0, 4.1); QT.add(L); ball(.08, MB(0xfff6ea), .1, .72, 4.35, 1, 1.2, 1, QT); }
+
+  /* -- andar de baixo: o andar inundado (x = 480) -- */
+  const FL = new T3.Group(); FL.position.set(480, 0, 0); scene.add(FL); PLACE.baixo = FL; CAB.baixo = cabin(FL, 0); OBJ.floodCab = CAB.baixo.g;
+  { const wm = M(0x2a2a2a, { map: TEX.plaster });
+    box(.1, 3, 20, wm, -3, 1.5, 10.7, FL); box(.1, 3, 20, wm, 3, 1.5, 10.7, FL); box(6, 3, .1, wm, 0, 1.5, 20.7, FL);
+    box(2.3, 3, .1, wm, -1.85, 1.5, .72, FL); box(2.3, 3, .1, wm, 1.85, 1.5, .72, FL); box(1.4, .6, .1, wm, 0, 2.7, .72, FL);
+    plane(6, 20, M(0x222222), 0, 3, 10.7, Math.PI / 2, 0, FL);
+    plane(6.2, 21.6, M(0x0b0b0b, { transparent: true, opacity: .94 }), 0, .42, 10, -Math.PI / 2, 0, FL);     // água preta até o joelho
+    OBJ.candles = [];
+    for (let i = 0; i < 12; i++) {
+      const z = 2.5 + i * 1.3 + R(-.3, .3), x = R(-2.2, 2.2), g = new T3.Group(); g.position.set(x, .42, z); FL.add(g);
+      const cd = new T3.Mesh(new T3.CylinderGeometry(.03, .035, .16, 10), M(0x7a0d08, { emissive: 0x300000 })); cd.position.y = .08; g.add(cd);
+      const fl = new T3.Sprite(new T3.SpriteMaterial({ map: TEX.flame, transparent: true, depthWrite: false, blending: T3.AdditiveBlending })); fl.position.y = .24; fl.scale.set(.08, .16, 1); overlayOnly(fl); g.add(fl);
+      const gl = new T3.Sprite(new T3.SpriteMaterial({ map: TEX.glow, color: 0xff2a17, transparent: true, depthWrite: false, blending: T3.AdditiveBlending, opacity: .45 })); gl.position.y = .24; gl.scale.set(.8, .8, 1); overlayOnly(gl); g.add(gl);
+      OBJ.candles.push({ g, x, z, lit: [fl, gl] });
+    }
+    OBJ.floodLights = [3.5, 9, 15].map(z => { const L = new T3.PointLight(0xff2a10, 1.1, 5, 2); L.position.set(0, .9, z); FL.add(L); return L; });
+    const FG = new T3.Group(); FG.position.set(.3, -.25, FLOODZ[0]); FL.add(FG); OBJ.floodFig = FG;           // de costas, parado na água
+    FG.add(new T3.Mesh(body, M(0x6a6a66)));
+    const face = new T3.Group(); FG.add(face); OBJ.floodFace = face; face.visible = false;
+    plane(.16, .08, MB(0xffffff, { map: TEX.grin, transparent: true }), 0, 1.8, .322, -.1, 0, face);
+    [-.036, .036].forEach(dx => ball(.024, MB(0xff2a17), dx, 1.9, .3, 1, .8, .5, face)); }
+
+  resetPortas();
+}
+
+/* ---------- ações ---------- */
+const FX_PORTAS = {
+  place(b) { Object.keys(PLACE).forEach(k => { PLACE[k].visible = k === b.place; }); },
+  oldDoorOpen() {
+    OBJ.oldDoor.visible = OBJ.oldKnob.visible = false; OBJ.oldLeaf.visible = OBJ.oldDark.visible = true;
+    tween({ delay: .3, dur: 2.2, ease: 'io', on: k => { OBJ.oldLeaf.rotation.y = k * 1.35; } });
+  },
+  newDoorOpen() {
+    OBJ.newDoorParts.forEach(p => { p.visible = false; }); OBJ.newLeaf.visible = OBJ.newDark.visible = true;
+    tween({ delay: .3, dur: 2.2, ease: 'io', on: k => { OBJ.newLeaf.rotation.y = k * 1.35; } });
+  },
+  // espelhos
+  sheetCover() {
+    OBJ.sheetFloor.visible = false; const s = OBJ.sheetBack; s.visible = true;
+    tween({ dur: 1.1, ease: 'out', on: k => { s.scale.y = Math.max(.02, k); s.position.y = 2.36 * (1 - k); } });
+  },
+  sheetFall() {
+    const s = OBJ.sheetRight;
+    tween({ dur: .7, ease: 'in', on: k => { s.scale.y = Math.max(.05, 1 - k); s.position.y = -k * .1; s.rotation.z = k * .2; }, done: () => { s.visible = false; OBJ.sheetFloor2.visible = true; } });
+  },
+  doubleAppear() {
+    const L = OBJ.mirLamp, i0 = L.intensity;
+    [[0, 0], [.12, i0], [.22, 0], [.5, i0]].forEach(([t, v]) => setTimeout(() => { L.intensity = v; if (t >= .22) OBJ.double.visible = true; }, t * 1000));
+  },
+  doubleLunge() {
+    const d = OBJ.double, p0 = d.position.clone(), tgt = v3(.85, -.2, -.9);
+    tween({ dur: .3, ease: 'in', on: k => { d.position.lerpVectors(p0, tgt, k); d.rotation.z = Math.sin(k * 9) * .08; } });
+    G.shake = .15; setTimeout(() => { G.shake = 0; }, 650);
+    setVeil({ c: '#fff', o: .75, d: 0 }); setTimeout(() => setVeil({ c: '#9c1d14', o: 1, d: 160 }), 280);
+  },
+  mirrorDim() { const L = OBJ.mirLamp1, i0 = L.intensity; tween({ dur: 3, ease: 'sine', on: k => { L.intensity = i0 * (1 - k) * (k > .6 ? (Math.random() > .5 ? 1 : .2) : 1); } }); },
+  mirrorHoles() { OBJ.mirHoles.visible = true; OBJ.mirHoles.children.forEach(s => { s.material.opacity = 0; }); tween({ dur: 1.8, ease: 'sine', on: k => OBJ.mirHoles.children.forEach(s => { s.material.opacity = k * .8; }) }); },
+  mirrorRipple() { const g = OBJ.glassBack; tween({ dur: 1.8, ease: 'in', on: (k, raw) => { g.material.opacity = .08 + k * .8; g.scale.set(1 + Math.sin(raw * 30) * .02 * k, 1 + Math.cos(raw * 26) * .02 * k, 1); } }); },
+  // o avesso
+  avesso() { const c = OBJ.creepy, a = OBJ.creepyArm; c.visible = true; OBJ.creepyTorch.visible = false; a.position.z = -.7; a.rotation.set(0, 0, 0); },
+  avessoTwitch() { const a = OBJ.creepyArm; tween({ dur: 2.6, ease: 'lin', on: (k, raw) => { a.rotation.x = Math.sin(raw * 22) * .025 * (1 - raw); a.rotation.z = Math.sin(raw * 9) * .04; } }); },
+  avessoTurn() { const a = OBJ.creepyArm; tween({ dur: 1.8, ease: 'io', on: k => { a.rotation.y = -k * .5; } }); },
+  avessoWithdraw() { const a = OBJ.creepyArm, r0 = a.rotation.y; tween({ dur: 1.6, ease: 'in', on: k => { a.position.z = -.7 - k * 1.3; a.rotation.y = r0 * (1 - k); }, done: () => { OBJ.creepy.visible = false; } }); },
+  qGlow() { const q = OBJ.avQ; tween({ dur: 2.2, ease: 'in', on: k => { q.scale.setScalar(1 + k * 5); } }); },
+  // elevador
+  grateOpen(b) { const g = CAB[b.cab].grate; tween({ delay: .1, dur: 1.2, ease: 'io', on: k => { g.scale.x = 1 - k * .88; } }); },
+  grateClose(b) { const g = CAB[b.cab].grate; tween({ dur: 1, ease: 'io', on: k => { g.scale.x = Math.min(1, .12 + k * .88); } }); },
+  grateShut(b) { CAB[b.cab].grate.scale.x = 1; },
+  ride() { const n = OBJ.dialNeedle; tween({ dur: 3, ease: 'io', on: (k, raw) => { n.rotation.z = Math.sin(raw * 5) * .7; } }); },
+  archiveDark() {
+    OBJ.archLamps.forEach(({ bulb, L }, i) => setTimeout(() => {
+      L.intensity = .1; setTimeout(() => { L.intensity = 0; bulb.material.color.setHex(0x222222); }, 120);
+      SND.play('click');
+    }, 300 + i * 520));
+  },
+  bedKnock() { const d = OBJ.bedDoor; [0, .32].forEach(t => tween({ delay: t, dur: .2, ease: 'lin', on: k => { d.position.x = -2 + Math.sin(k * Math.PI) * .012; } })); },
+  bedDoorOpen() { const d = OBJ.bedDoor; tween({ delay: .3, dur: 3.4, ease: 'sine', on: k => { d.rotation.y = -k * .55; } }); setTimeout(() => { OBJ.bedHand.visible = true; }, 1800); },
+  cabinUp() { const g = OBJ.floodCab; tween({ delay: .6, dur: 3.2, ease: 'in', on: k => { g.position.y = k * 3.2; } }); },
+  candlesOut(b) {
+    const n = b.n || 1, fig = OBJ.floodFig;
+    OBJ.candles.forEach(c => { const far = c.z > [14, 8, -1][n - 1]; if (far) c.lit.forEach(s => { s.visible = false; }); });
+    OBJ.floodLights.forEach((L, i) => { L.intensity = i < 3 - n ? 1.1 : 0; });
+    if (FLOODZ[n]) fig.position.z = FLOODZ[n];
+  },
+  floodFace() {
+    const fig = OBJ.floodFig; fig.position.set(0, -.2, 3.15); fig.rotation.y = Math.PI; OBJ.floodFace.visible = true;
+    const c = OBJ.candles[0]; c.g.position.set(.25, .42, 2.75); c.lit.forEach(s => { s.visible = true; }); OBJ.floodLights[0].position.set(.25, .9, 2.8); OBJ.floodLights[0].intensity = 1.4;
+  },
+  floodLunge() {
+    const f = OBJ.floodFig, p0 = f.position.clone(), tgt = v3(0, -.15, 1.75);
+    tween({ dur: .26, ease: 'in', on: k => { f.position.lerpVectors(p0, tgt, k); } });
+    G.shake = .16; setTimeout(() => { G.shake = 0; }, 700);
+    setVeil({ c: '#fff', o: .7, d: 0 }); setTimeout(() => setVeil({ c: '#9c1d14', o: 1, d: 180 }), 260);
+  },
+};
+function resetPortas() {
+  Object.values(PLACE).forEach(g => { g.visible = false; });
+  OBJ.oldDoor.visible = OBJ.oldKnob.visible = true; OBJ.oldLeaf.visible = OBJ.oldDark.visible = false; OBJ.oldLeaf.rotation.y = 0;
+  OBJ.newDoorParts.forEach(p => { p.visible = true; }); OBJ.newLeaf.visible = OBJ.newDark.visible = false; OBJ.newLeaf.rotation.y = 0;
+  OBJ.sheetFloor.visible = true; OBJ.sheetBack.visible = false; OBJ.sheetBack.scale.y = 1; OBJ.sheetBack.position.y = 0;
+  const s = OBJ.sheetRight; s.visible = true; s.scale.y = 1; s.position.y = 0; s.rotation.z = 0; OBJ.sheetFloor2.visible = false;
+  OBJ.double.visible = false; OBJ.double.position.set(4.0, 0, -.9); OBJ.double.rotation.z = 0;
+  OBJ.mirLamp.intensity = 1.1; OBJ.mirLamp1.intensity = .9; OBJ.mirHoles.visible = false; OBJ.glassBack.material.opacity = .08; OBJ.glassBack.scale.set(1, 1, 1);
+  OBJ.avQ.scale.setScalar(1);
+  Object.values(CAB).forEach(c => { c.grate.scale.x = 1; c.g.position.y = 0; }); OBJ.dialNeedle.rotation.z = 0;
+  OBJ.archLamps.forEach(({ bulb, L }) => { L.intensity = 1.6; bulb.material.color.setHex(0xffffff); });
+  OBJ.bedDoor.rotation.y = 0; OBJ.bedDoor.position.x = -2; OBJ.bedHand.visible = false;
+  OBJ.candles.forEach(c => { c.lit.forEach(s => { s.visible = true; }); }); OBJ.candles.forEach(c => c.g.position.set(c.x, .42, c.z));
+  OBJ.floodLights.forEach((L, i) => { L.intensity = 1.1; L.position.set(0, .9, [3.5, 9, 15][i]); });
+  OBJ.floodFig.position.set(.3, -.25, FLOODZ[0]); OBJ.floodFig.rotation.y = 0; OBJ.floodFace.visible = false;
+}
+
+/* ---------- ambientes ---------- */
+const ENV_PORTAS = {
+  mirror: { bg: 0x3a3a3a, fog: [0x3a3a3a, .015], amb: .32, hemi: .14 },
+  elevator: { bg: 0x101010, fog: [0x101010, .04], amb: .12, hemi: .05 },
+  archive: { bg: 0x0e0e0e, fog: [0x101010, .05], amb: .14, hemi: .06 },
+  bedroom: { bg: 0x161616, fog: [0x161616, .03], amb: .16, hemi: .06 },
+  flood: { bg: 0x030303, fog: [0x050505, .1], amb: .03, hemi: .02 },
+};
+
+/* ============================================================
    DESTINO 3D — roteiro dirigido: câmera contínua, ações em cena.
    cam: {p:[x,y,z], l:[alvo], d:segundos, walk, e, cut} ou lista
    auto: segue sozinho após N ms · sem auto/choice: espera toque
@@ -2501,6 +2809,8 @@ const NOTES = {
   fugiu: { lines: ['OH,', 'VOCÊ', 'FUGIU...'], o: { fs: 58, lh: 68, fill: '#e6e6e6' }, w: 300, h: 330, rot: 8, skin: '#dcdcdc' },
   verso: { lines: [], o: { fill: '#e6e6e6', after: '<path d="M-60,-40 l120,60 l-90,40 l100,40" stroke="#aaa" stroke-width="4" fill="none" opacity=".5"/>' }, w: 300, h: 330, rot: -3, skin: '#dcdcdc' },
   semLuz: { lines: ['SEM LUZ, AQUI FORA', 'VOCÊ NÃO DURA', 'NEM ATÉ A PRIMEIRA ÁRVORE.', '', 'FIQUE AÍ DENTRO...', 'POR ENQUANTO.'], o: { fs: 38, lh: 64, fill: '#e9e9e9' }, w: 440, h: 520, rot: -7 },
+  cima: { lines: ['VOCÊ NÃO DEVIA', 'TER SUBIDO', 'SEM LUZ.'], o: { fs: 34, lh: 50, font: 'Courier Prime, Courier New, monospace' }, w: 340, h: 300, rot: 2 },
+  meio: { lines: ['NÃO DEITE.', '', 'EU DEITEI UMA VEZ', 'E ACORDEI', 'NO CORREDOR.'], o: { fs: 40, lh: 54 }, w: 380, h: 420, rot: -4 },
   olhe: { lines: ['OLHE', 'PARA', 'MIM'], o: { fs: 92, lh: 116, fill: '#e6e6e6', font: 'Rock Salt, Patrick Hand SC, cursive' }, w: 380, h: 450, rot: -6, skin: '#dcdcdc' },
 };
 
@@ -2580,7 +2890,125 @@ const STORY = {
     { fx: 'sideDoorOpen', sfx: 'creak', cam: { p: [118.1, 1.6, 1.0], l: [116.5, 1.4, 1.0], d: 2.4, walk: 1 }, veil: { c: '#000', o: 1, d: 1400, delay: 900 }, auto: 2700 },
     { env: 'corridor', amb: 'dark', fx: 'twoDoors', sfx: 'steps', cam: { p: [4.6, 1.6, -8.8], l: [7.8, 1.1, -9.9], cut: 1 }, veil: { o: 0, d: 2200 }, auto: 2600 },
     { sfx: 'steps', cam: { p: [6.1, 1.6, -7.9], l: [7.9, 1.05, -10], d: 3.2, walk: 1 }, choiceAt: 3400,
-      choice: { q: '?', opts: [['Entrar na porta trancada', 50], ['Entrar na porta nova', 50]] } },
+      choice: { q: '?', opts: [['Entrar na porta trancada', 50, 'espelhos'], ['Entrar na porta nova', 50, 'elevador']] } },
+  ] },
+
+  /* a porta trancada: a chave serve. Lá dentro, espelhos cobertos; o do fundo está descoberto */
+  espelhos: { beats: [
+    { sfx: 'steps', cam: [{ p: [6.2, 1.6, -8.4], l: [7.2, 1.2, -10], d: 1.8, walk: 1 }, { p: [7.15, 1.6, -9.1], l: [7.4, 1.0, -10], d: 1.6, walk: 1 }], auto: 3500 },
+    { sfx: 'knob', auto: 1500 },
+    { fx: 'oldDoorOpen', sfx: 'creak', cam: { p: [7.2, 1.6, -9.3], l: [7.2, 1.4, -11], d: 2 }, veil: { c: '#000', o: 1, d: 1300, delay: 1000 }, auto: 2500 },
+    { fx: 'place', place: 'mirror', env: 'mirror', amb: 'room', cam: { p: [180, 1.6, 2.1], l: [180, 1.3, -2.5], cut: 1 }, veil: { o: 0, d: 2400 }, auto: 3000 },
+    { sfx: 'steps', cam: [{ p: [180, 1.6, 1.0], l: [178, 1.3, -.6], d: 2.6, walk: 1 }, { p: [180, 1.6, .5], l: [181.8, 1.3, .3], d: 2.4 }], auto: 5200 },
+    { sfx: 'steps', cam: { p: [180, 1.6, -.7], l: [180, 1.45, -2.5], d: 3.2, walk: 1 }, choiceAt: 3600,
+      choice: { q: '?', opts: [['Cobrir o espelho', 52, 'espelhoCobrir'], ['Continuar olhando', 48, 'espelhoPortal']] } },
+  ] },
+
+  /* cobrir o espelho: outro lençol cai, e quem está no outro espelho não é ela */
+  espelhoCobrir: { beats: [
+    { fx: 'sheetCover', sfx: 'flap', cam: { p: [180, 1.6, -1.5], l: [180, 1.1, -2.5], d: 1.4 }, auto: 2400 },
+    { cam: { p: [180, 1.6, -1.1], l: [180, 1.4, -2.5], d: 1.6 }, auto: 2200 },
+    { fx: 'sheetFall', sfx: 'flap', say: say('FLAP', 72, 40, { ink: 1 }), auto: 1700 },
+    { cam: { p: [180.1, 1.6, -.9], l: [182, 1.4, -.9], d: 1.6 }, auto: 2600 },
+    { fx: 'doubleAppear', amb: 'none', cam: { p: [180.45, 1.6, -.9], l: [182, 1.62, -.9], d: 3.2, e: 'sine' }, auto: 3400 },
+    { fx: 'doubleLunge', sfx: 'jump', auto: 1000 },
+    { sfx: 'gulp', veil: { c: '#000', o: 1, d: 1500 }, fx: 'swallow', amb: 'void', auto: 2200 },
+    { fx: 'lightBlob', auto: 3000 },
+    { fx: 'resetWorld', env: 'corridor', amb: 'room', cam: { p: [0, 1.6, 1.3], l: [0, 1.5, -10], cut: 1 }, veil: { c: '#000', o: 0, d: 2800 }, end: true },
+  ] },
+
+  /* continuar olhando: o reflexo apaga, o espelho cede, e do outro lado está o avesso da parede dos buracos */
+  espelhoPortal: { next: 'abrir1', nextAt: 7, beats: [
+    { fx: 'mirrorDim', sfx: 'tension', cam: { p: [180, 1.6, -1.3], l: [180, 1.5, -2.5], d: 3.2, e: 'sine' }, auto: 3600 },
+    { fx: 'mirrorHoles', auto: 2800 },
+    { fx: 'mirrorRipple', sfx: 'whoosh', cam: { p: [180, 1.6, -2.4], l: [180, 1.5, -4], d: 2.2, walk: 1 }, veil: { c: '#000', o: 1, d: 1100, delay: 1000 }, auto: 2600 },
+    { fx: ['place', 'avesso'], place: 'avesso', env: 'dark', amb: 'dark', cam: { p: [121.7, 1.6, -4.0], l: [120.4, 1.4, -3.1], cut: 1 }, veil: { o: 0, d: 2600 }, auto: 3000 },
+    { sfx: 'steps', cam: { p: [120.6, 1.6, -3.9], l: [119.4, 1.45, -3.3], d: 3, walk: 1 }, auto: 3400 },
+    { fx: 'avessoTwitch', cam: { l: [119.3, 1.42, -3.45], d: 2.4 }, auto: 3000 },
+    { fx: 'avessoTurn', sfx: 'tension', cam: { p: [120.45, 1.6, -3.85], d: 2 }, auto: 2600 },
+    { fx: 'avessoWithdraw', sfx: 'whoosh', cam: { l: [119.3, 1.5, -3.2], d: 1.6 }, auto: 2400 },
+    { fx: 'qGlow', cam: { p: [119.35, 1.55, -3.45], l: [119.3, 1.5, -3.0], d: 2.4, walk: 1 }, veil: { c: '#fff', o: 1, d: 1500, delay: 900 }, auto: 2700 },
+    { fx: 'place', env: 'white', amb: 'room', cam: { p: [120, 1.6, -.3], l: [120, 1.55, -3], cut: 1 }, veil: { o: 0, d: 2600 }, auto: 2400 },
+  ] },
+
+  /* a porta nova: a chave serve. Uma antessala e um elevador com três botões sem número */
+  elevador: { beats: [
+    { sfx: 'steps', cam: [{ p: [7.0, 1.6, -8.6], l: [8.4, 1.1, -10], d: 1.8, walk: 1 }, { p: [8.35, 1.6, -9.1], l: [8.6, 1.0, -10], d: 1.6, walk: 1 }], auto: 3500 },
+    { sfx: 'knob', auto: 1500 },
+    { fx: 'newDoorOpen', sfx: 'creak', cam: { p: [8.4, 1.6, -9.3], l: [8.4, 1.4, -11], d: 2 }, veil: { c: '#000', o: 1, d: 1300, delay: 1000 }, auto: 2500 },
+    { fx: 'place', place: 'elevator', env: 'elevator', amb: 'dark', cam: { p: [240, 1.6, 1.1], l: [240, 1.25, -2.2], cut: 1 }, veil: { o: 0, d: 2400 }, auto: 3000 },
+    { sfx: 'steps', cam: { p: [240, 1.6, -.6], l: [240, 1.3, -2.6], d: 2.6, walk: 1 }, auto: 2800 },
+    { sfx: 'steps', cam: [{ p: [240, 1.6, -2.15], l: [240, 1.4, -3], d: 1.8, walk: 1 }, { p: [240.1, 1.6, -2.3], l: [240.69, 1.28, -1.97], d: 1.6 }], auto: 3600 },
+    { cam: { p: [240.2, 1.6, -2.3], l: [240.69, 1.3, -1.97], d: 1.2 }, choiceAt: 1300,
+      choice: { q: '?', opts: [['Botão de cima', 34, 'andarCima'], ['Botão do meio', 28, 'andarMeio'], ['Botão de baixo', 38, 'andarBaixo']] } },
+  ] },
+
+  /* de volta à cabine da antessala, para escolher outro botão */
+  voltaElevador: { next: 'elevador', nextAt: 6, beats: [
+    { veil: { c: '#000', o: 1, d: 700 }, sfx: 'tension', shake: .02, auto: 2200 },
+    { fx: ['place', 'grateShut', 'ride'], place: 'elevator', cab: 'elev', shake: 0, env: 'elevator', amb: 'dark', cam: { p: [240, 1.6, -2.4], l: [240, 1.4, -1], cut: 1 }, veil: { o: 0, d: 1400 }, auto: 1800 },
+  ] },
+
+  /* botão de cima: o arquivo. Pacotes de papel presos com fio vermelho; as luzes apagam até a cabine */
+  andarCima: { next: 'voltaElevador', beats: [
+    { fx: 'grateClose', cab: 'elev', sfx: 'creak', cam: { l: [240, 1.4, -1], d: 1.4 }, auto: 1600 },
+    { fx: 'ride', veil: { c: '#000', o: 1, d: 900 }, shake: .02, sfx: 'tension', auto: 3200 },
+    { fx: ['place', 'grateShut'], place: 'cima', cab: 'cima', shake: 0, env: 'archive', amb: 'dark', cam: { p: [360, 1.6, -.2], l: [360, 1.45, 6], cut: 1 }, veil: { o: 0, d: 1400 }, auto: 1600 },
+    { fx: 'grateOpen', cab: 'cima', sfx: 'creak', auto: 1800 },
+    { sfx: 'steps', cam: { p: [360, 1.6, 7], l: [360, 1.35, 14], d: 6, walk: 1 }, auto: 6000 },
+    { sfx: 'steps', cam: { p: [360, 1.6, 14.4], l: [360, .95, 15.5], d: 3.6, walk: 1 }, auto: 3800 },
+    { note: 'cima', sfx: 'paper', hold: true },
+    { note: null, fx: 'archiveDark', amb: 'none', cam: { p: [360, 1.6, 14.2], l: [360, 1.4, 0], d: 1.6 }, auto: 3400 },
+    { sfx: 'run', cam: { p: [360, 1.6, -.15], l: [360, 1.4, -1], d: 3.4, walk: 1 }, shake: .02, auto: 3400 },
+    { fx: 'grateClose', cab: 'cima', sfx: 'slam', shake: 0, cam: { l: [360, 1.5, 5], d: 1.1 }, auto: 2000 },
+  ] },
+
+  /* botão do meio: o quarto de alguém. A cama ainda tem a forma de quem dormia */
+  andarMeio: { beats: [
+    { fx: 'grateClose', cab: 'elev', sfx: 'creak', cam: { l: [240, 1.4, -1], d: 1.4 }, auto: 1600 },
+    { fx: 'ride', veil: { c: '#000', o: 1, d: 900 }, shake: .02, sfx: 'tension', auto: 3200 },
+    { fx: ['place', 'grateShut'], place: 'meio', cab: 'meio', shake: 0, env: 'bedroom', amb: 'room', cam: { p: [420, 1.6, -.2], l: [420, 1.4, 4], cut: 1 }, veil: { o: 0, d: 1400 }, auto: 1600 },
+    { fx: 'grateOpen', cab: 'meio', sfx: 'creak', auto: 1800 },
+    { sfx: 'steps', cam: { p: [420, 1.6, 1.7], l: [419, .7, 3.6], d: 3, walk: 1 }, auto: 3400 },
+    { cam: { p: [419.3, 1.45, 3.3], l: [419.1, .6, 4.25], d: 2.4, walk: 1 }, auto: 2600 },
+    { note: 'meio', sfx: 'paper', hold: true },
+    { note: null, fx: 'bedKnock', sfx: 'knock', say: say('Toc<br>&nbsp;&nbsp;Toc', 22, 40, { ink: 1 }), cam: { p: [419.4, 1.6, 2.9], l: [418, 1.2, 2.2], d: 1.4 }, choiceAt: 1800,
+      choice: { q: '?', opts: [['Deitar na cama', 45, 'deitar'], ['Voltar ao elevador', 55, 'voltaQuarto']] } },
+  ] },
+
+  voltaQuarto: { next: 'voltaElevador', beats: [
+    { sfx: 'run', cam: [{ p: [420, 1.6, -.2], l: [420, 1.4, -1], d: 2.4, walk: 1 }, { l: [420, 1.4, 3], d: .9 }], auto: 3400 },
+    { fx: 'grateClose', cab: 'meio', sfx: 'creak', auto: 1600 },
+  ] },
+
+  /* deitar: o sono vem antes de quem bate. Acorda no corredor, sem susto */
+  deitar: { beats: [
+    { sfx: 'steps', cam: [{ p: [419.1, 1.0, 3.0], l: [419, .6, 3.8], d: 1.8 }, { p: [419, .8, 3.4], l: [419.05, 2.6, 3.2], d: 2.4 }], auto: 4400 },
+    { fx: 'bedKnock', sfx: 'knock', say: say('Toc<br>&nbsp;&nbsp;Toc', 18, 44, { ink: 1 }), auto: 2600 },
+    { amb: 'none', auto: 2600 },
+    { fx: 'bedDoorOpen', sfx: 'creak', cam: { l: [418, 1.2, 2.4], d: 2.6, e: 'sine' }, auto: 3800 },
+    { cam: { l: [419.05, 2.6, 3.2], d: 3 }, veil: { c: '#000', o: 1, d: 4000 }, auto: 4400 },
+    { amb: 'void', fx: 'lightBlob', auto: 3000 },
+    { fx: 'resetWorld', env: 'corridor', amb: 'room', cam: { p: [0, 1.6, 1.3], l: [0, 1.5, -10], cut: 1 }, veil: { c: '#000', o: 0, d: 2800 }, end: true },
+  ] },
+
+  /* botão de baixo: o andar inundado. Velas vermelhas boiando, alguém de costas, e a cabine vai embora */
+  andarBaixo: { beats: [
+    { fx: 'grateClose', cab: 'elev', sfx: 'creak', cam: { l: [240, 1.4, -1], d: 1.4 }, auto: 1600 },
+    { fx: 'ride', veil: { c: '#000', o: 1, d: 900 }, shake: .02, sfx: 'tension', auto: 3600 },
+    { fx: ['place', 'grateShut'], place: 'baixo', cab: 'baixo', shake: 0, env: 'flood', amb: 'void', cam: { p: [480, 1.6, -.2], l: [480, 1.35, 8], cut: 1 }, veil: { o: 0, d: 1600 }, auto: 1800 },
+    { fx: 'grateOpen', cab: 'baixo', sfx: 'creak', auto: 1800 },
+    { sfx: 'steps', cam: { p: [480, 1.55, 2.6], l: [480.2, 1.3, 14], d: 4, walk: 1 }, auto: 4600 },
+    { fx: ['grateClose', 'cabinUp'], cab: 'baixo', sfx: 'slam', cam: { l: [480, 1.6, -1], d: 1.4 }, auto: 4200 },
+    { cam: { l: [480.2, 1.3, 14], d: 1.8 }, auto: 2200 },
+    { fx: 'candlesOut', n: 1, sfx: 'tension', auto: 2600 },
+    { fx: 'candlesOut', n: 2, auto: 2600 },
+    { fx: 'candlesOut', n: 3, amb: 'none', auto: 2800 },
+    { fx: 'floodFace', cam: { l: [480, 1.62, 3.15], d: .6 }, auto: 1700 },
+    { fx: 'floodLunge', sfx: 'jump', auto: 1000 },
+    { sfx: 'gulp', veil: { c: '#000', o: 1, d: 1500 }, fx: 'swallow', amb: 'void', auto: 2200 },
+    { fx: 'lightBlob', auto: 3000 },
+    { fx: 'resetWorld', env: 'corridor', amb: 'room', cam: { p: [0, 1.6, 1.3], l: [0, 1.5, -10], cut: 1 }, veil: { c: '#000', o: 0, d: 2800 }, end: true },
   ] },
 
   abrir1: { beats: [
@@ -2809,6 +3237,7 @@ const ENV = {
   voidLit: { bg: 0x1a1a1a, fog: [0x333333, .14], amb: .12, hemi: .05 },
   chase: { bg: 0x6b6b6b, fog: [0x777777, .2], amb: .3, hemi: .1, lf: 1.1 },
 };
+Object.assign(ENV, ENV_PORTAS);
 function setEnv(name, instant) {
   const e = ENV[name]; if (!e) return;
   if (!scene.fog) scene.fog = new T3.FogExp2(0x000000, 0);
@@ -2971,6 +3400,7 @@ const FX = {
   twoDoors() { OBJ.newDoor.visible = true; },
   resetWorld,
 };
+Object.assign(FX, FX_PORTAS);
 function dropPaper(from, to, keep) {
   const p = OBJ.paper; p.visible = true; p.userData.keep = keep; p.position.copy(from);
   tween({ dur: 2.5, ease: 'sine', on: (k, raw) => {
@@ -2988,6 +3418,7 @@ function resetWorld() {
   OBJ.wallNotes.visible = OBJ.markNote.visible = OBJ.wallBare.visible = false; OBJ.backGlow.intensity = 0; OBJ.collector.visible = false; OBJ.collector.position.set(0, 0, .75); OBJ.collector.rotation.set(0, Math.PI, 0); OBJ.collArm.rotation.set(0, 0, 0);
   OBJ.stripLight.intensity = .9; OBJ.strip.visible = true; OBJ.ruleNote.material.map = TEX.rule; OBJ.ruleNote.material.needsUpdate = true;
   OBJ.key.visible = false; OBJ.key.position.set(.7, 1.5, -3.12); OBJ.sideDoor.visible = OBJ.sideDark.visible = false; OBJ.sideDoor.rotation.y = 0; OBJ.newDoor.visible = false; OBJ.oldDoor.position.x = 7.2;
+  resetPortas();
   OBJ.paper.visible = false; G.torch = false; G.hudDim = 0; G.shake = 0; torchLight.intensity = 0; CTX.bat = 21; G.hudKey = ''; renderHud();
   noteEl.innerHTML = ''; reachEl.innerHTML = '';
   stageEl.classList.remove('gulp');
@@ -3236,7 +3667,7 @@ function fit() { const r = stageEl.getBoundingClientRect(); resize3d(Math.max(1,
 (function boot() {
   initRenderer($('#gl'));
   const go = () => {
-    buildWorld(); fit(); new ResizeObserver(fit).observe(stageEl);
+    buildWorld(); buildPortas(); fit(); new ResizeObserver(fit).observe(stageEl);
     setEnv('corridor', true); camera.position.copy(CAM.p); camera.lookAt(CAM.l);
     setVeil({ c: '#a80000', o: 0, d: 0 });
     const q = new URLSearchParams(location.search);
