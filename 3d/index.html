@@ -194,7 +194,7 @@ svg.layer [class] { transform-box: view-box; transform-origin: 360px 640px; }
 @keyframes faceIn { from { transform: translateY(-260px) scale(.85); opacity: 0; } }
 .faceTwitch { transform-origin: 360px 300px !important; animation: twitch 3s steps(1) infinite; }
 @keyframes twitch { 0%, 100% { transform: none; } 40% { transform: rotate(3deg); } 42% { transform: rotate(-2deg) translateX(4px); } 44% { transform: none; } }
-.lunge { transform-origin: 360px 380px !important; animation: lunge .9s ease-in both; }
+.lunge { transform-origin: 360px 380px !important; animation: lunge .36s cubic-bezier(.6, 0, .9, .4) both; }
 @keyframes lunge { to { transform: translate(-40px, 200px) scale(3.6) rotate(-14deg); opacity: .6; } }
 .swallow { animation: swallow 1.8s ease-in both; }
 @keyframes swallow { from { transform: scale(1.4) translateY(120px); } to { transform: scale(.85) translateY(-60px); } }
@@ -230,8 +230,8 @@ svg.layer [class] { transform-box: view-box; transform-origin: 360px 640px; }
 /* ---------- impressão digital do Recolhedor, colada na "lente" ---------- */
 #print { position: absolute; left: 50%; top: 46%; width: 42%; transform: translate(-50%, -50%) rotate(-14deg); z-index: 3; pointer-events: none; opacity: .92; }
 #print svg { width: 100%; height: auto; display: block; }
-#print.on { animation: pressPrint .35s ease-out both; }
-@keyframes pressPrint { from { opacity: 0; transform: translate(-50%, -50%) rotate(-14deg) scale(1.15); } }
+#print.on { animation: slamPrint .26s cubic-bezier(.2, 1.7, .4, 1) both; }
+@keyframes slamPrint { 0% { opacity: 0; transform: translate(-50%, -50%) rotate(-24deg) scale(2.1); } 60% { opacity: 1; transform: translate(-50%, -50%) rotate(-12deg) scale(.92); } 100% { opacity: .92; transform: translate(-50%, -50%) rotate(-14deg) scale(1); } }
 
 /* ---------- Olhar para trás ---------- */
 .eyesAdjust { animation: eyesAdjust 4.5s ease-out both; }
@@ -246,6 +246,13 @@ svg.layer [class] { transform-box: view-box; transform-origin: 360px 640px; }
 @keyframes tiltUpSlow { from { transform: translateY(-260px); } to { transform: translateY(160px); } }
 .handRise { animation: handRise 2s cubic-bezier(.3, .7, .3, 1) both; }
 @keyframes handRise { from { transform: translateY(620px); } }
+
+/* ---------- susto do Recolhedor: o rosto avança, a mão golpeia ---------- */
+.lungeFast { transform-origin: 360px 540px !important; animation: lungeFast .3s cubic-bezier(.6, 0, .9, .4) both; }
+@keyframes lungeFast { from { transform: scale(1); } to { transform: scale(2.7) translateY(30px) rotate(-7deg); } }
+.strikeFast { transform-origin: 360px 1280px !important; animation: strikeFast .2s cubic-bezier(.6, 0, .9, .4) both; }
+@keyframes strikeFast { from { transform: translate(420px, 760px) rotate(32deg) scale(.8); } }
+#stage.shake { animation: shakeStage .45s; }
 
 /* ---------- camadas da versão 3D ---------- */
 #gl, #gl canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -1566,7 +1573,7 @@ ART.collectorFeet = () => {
   const foot = (x, m) => `<path d="M${x - 26 * m},560 C${x - 30 * m},700 ${x - 22 * m},820 ${x - 18 * m},900 C${x - 40 * m},940 ${x - 70 * m},990 ${x - 64 * m},1010 L${x + 40 * m},1012 C${x + 34 * m},980 ${x + 20 * m},940 ${x + 16 * m},900 C${x + 20 * m},820 ${x + 26 * m},700 ${x + 26 * m},560 Z" fill="#7d7d7a" stroke="${INK}" stroke-width="4" filter="url(#ink)"/>
     <path d="M${x - 58 * m},1008 l0,-12 M${x - 40 * m},1010 l0,-13 M${x - 22 * m},1011 l0,-13 M${x - 4 * m},1011 l0,-12 M${x + 14 * m},1011 l0,-11" stroke="${INK}" stroke-width="2.5"/>`;
   s += foot(300, 1) + foot(440, -1);
-  s += `<g class="breathPaper">${collectorScales([180, 560, 300, 660], 46, 85, .95)}</g>`;
+  s += `<g>${collectorScales([180, 560, 300, 660], 46, 85, .95)}</g>`;
   s += `<rect width="${W}" height="700" fill="url(#upDark)"/>`;
   return s + vig(.95);
 };
@@ -1575,31 +1582,30 @@ ART.collectorBody = () => {
   let s = bg('#040404') + `<g class="tiltUpSlow">`;
   s += `<path d="M250,-200 C220,200 230,700 280,1300 L440,1300 C490,700 500,200 470,-200 Z" fill="#3a3a38"/>`;
   s += `<path d="M190,0 C150,300 150,700 170,980 M530,0 C570,300 570,700 550,980" stroke="#2c2c2a" stroke-width="54" fill="none" stroke-linecap="round"/>`;
-  s += `<g class="breathPaper">${collectorScales([200, 520, -180, 1300], 120, 87, 1.05)}</g>`;
+  s += `<g>${collectorScales([200, 520, -180, 1300], 120, 87, 1.05)}</g>`;
   s += `</g><rect width="${W}" height="${H}" fill="url(#upDark)" opacity=".85"/>`;
   return s + `<ellipse cx="360" cy="1300" rx="420" ry="260" fill="#fff" opacity=".08" filter="url(#blur40)"/>` + vig(.9);
 };
 ART.collectorFace = () => {
   seed(88);
   let s = bg('#050505');
-  s += `<g class="breathPaper">${collectorScales([90, 630, 900, 1300], 40, 89, 1.25)}</g>`;
+  s += `<g>${collectorScales([90, 630, 900, 1300], 40, 89, 1.25)}</g>`;
   s += `<path d="M360,180 C500,180 560,320 560,520 C560,720 470,860 360,860 C250,860 160,720 160,520 C160,320 220,180 360,180 Z" fill="#3c3c3a" stroke="${INK}" stroke-width="5" filter="url(#ink)"/>`;
   const tape = `<rect x="-200" y="-240" width="70" height="20" fill="#9a988e" opacity=".9" transform="rotate(-30 -165 -230)"/><rect x="120" y="-240" width="70" height="20" fill="#9a988e" opacity=".9" transform="rotate(25 155 -230)"/><rect x="130" y="200" width="70" height="20" fill="#9a988e" opacity=".9" transform="rotate(-20 165 210)"/><path d="M-60,40 q60,-30 120,0" stroke="#000" stroke-width="10" opacity=".08" fill="none"/>`;
-  s += `<g class="faceNoteBreath">` + paper(360, 540, 360, 440, -5, ['NÃO OLHE', 'PARA TRÁS'], { fs: 64, lh: 90, fill: '#d9d8d2', shadowOp: .5, after: tape }) + `</g>`;
+  s += `<g>` + paper(360, 540, 360, 440, -5, ['NÃO OLHE', 'PARA TRÁS'], { fs: 64, lh: 90, fill: '#d9d8d2', shadowOp: .5, after: tape }) + `</g>`;
   s += `<ellipse cx="360" cy="560" rx="380" ry="460" fill="#000" opacity=".35" filter="url(#blur40)"/>`;
   return s + vig(.85);
 };
-ART.collectorTouch = () => {
-  let s = `<g filter="url(#blur6)" opacity=".75">` + ART.collectorFace() + `</g>`;
+ART.collectorAttack = () => {
+  // o rosto avança de uma vez e a mão golpeia ao mesmo tempo
+  let s = `<g class="lungeFast">` + ART.collectorFace() + `</g>`;
   seed(90);
-  // a mão dele sobe: dedos longos e finos, pontas vermelhas de tinta
   const fingers = [[[300, 1180], [320, 900], [345, 700]], [[340, 1180], [352, 880], [360, 640]], [[380, 1180], [392, 900], [404, 720]], [[410, 1190], [440, 980], [452, 820]]];
-  s += `<g class="handRise">`;
+  s += `<g class="strikeFast"><g filter="url(#motionD)">`;
   s += body([{ d: 'M250,1300 C250,1220 270,1150 330,1140 C400,1130 450,1160 460,1220 L470,1300 Z' }, ...fingers.map(f => ({ l: f, w: 22 })), { l: [[270, 1210], [220, 1080], [215, 990]], w: 24 }], '#8d8d8a', 4);
-  s += `<g fill="${RED}" filter="url(#ink)">${fingers.map(f => `<ellipse cx="${f[2][0]}" cy="${f[2][1] + 8}" rx="10" ry="14"/>`).join('')}<ellipse cx="215" cy="998" rx="11" ry="14"/></g>`;
-  s += `<path d="M330,1000 q14,-4 26,0 M336,860 q12,-4 22,0 M380,960 q12,-4 22,0" stroke="${INK}" stroke-width="2.5" fill="none"/>`;
-  s += `</g>`;
-  return s + vig(.7);
+  s += `<g fill="${RED}">${fingers.map(f => `<ellipse cx="${f[2][0]}" cy="${f[2][1] + 8}" rx="10" ry="14"/>`).join('')}<ellipse cx="215" cy="998" rx="11" ry="14"/></g>`;
+  s += `</g></g>`;
+  return s + vig(.6);
 };
 
 /* ============================================================
@@ -2422,9 +2428,9 @@ const STORY = {
     { veil: { o: 0, d: 3000 }, cam: { p: [60, 1.6, .05], l: [60, 1.4, 2.2], d: 3 }, auto: 3600 },
     { fx: 'collectorAppear', sfx: 'paper', cam: { l: [60, .05, .6], d: 2.4 }, auto: 3800 },
     { sfx: 'tension', cam: { l: [60, 1.9, .72], d: 5.5, e: 'sine' }, auto: 5800 },
-    { cam: { p: [60, 1.74, .2], l: [60, 1.86, .62], d: 2.6 }, auto: 3800 },
-    { fx: 'collectorTouch', print: 1500, auto: 3600 },
-    { fx: 'stripOff', veil: { c: '#000', o: 1, d: 200, delay: 200 }, sfx: 'flap', amb: 'void', auto: 2200 },
+    { amb: 'none', cam: { p: [60, 1.74, .2], l: [60, 1.86, .62], d: 2.6 }, auto: 3400 },
+    { fx: 'collectorAttack', sfx: 'jump', print: 170, auto: 1000 },
+    { fx: 'stripOff', veil: { c: '#000', o: 1, d: 80 }, sfx: 'flap', amb: 'void', auto: 2200 },
     { fx: 'lightBlob', auto: 3000 },
     { fx: 'resetWorld', env: 'corridor', amb: 'room', cam: { p: [0, 1.6, 1.3], l: [0, 1.5, -10], cut: 1 }, veil: { c: '#000', o: 0, d: 2800 }, end: true },
   ] },
@@ -2534,8 +2540,8 @@ const STORY = {
     { note: 'olhe', sfx: 'paper' },
     { note: null, bat: 13, cam: { l: [LEGS2.x, 10.4, LEGS2.z], d: 5.5, e: 'sine' }, auto: 5600 },
     { fx: 'faceDown', sfx: 'tension', cam: { l: [LEGS2.x, 5.2, LEGS2.z], d: 4.5 } },
-    { fx: 'faceNote' },
-    { fx: 'lunge', sfx: 'scream', veil: { c: '#9c1d14', o: 1, d: 600, delay: 450 }, auto: 1300 },
+    { fx: 'faceNote', amb: 'none' },
+    { fx: 'lunge', sfx: 'jump', auto: 1000 },
     { sfx: 'gulp', veil: { c: '#000', o: 1, d: 1700 }, fx: 'swallow', auto: 2300 },
     { amb: 'void', fx: 'lightBlob', auto: 3000 },
     { fx: 'resetWorld', env: 'corridor', amb: 'room', cam: { p: [0, 1.6, 1.3], l: [0, 1.5, -10], cut: 1 }, veil: { c: '#000', o: 0, d: 2800 }, end: true },
@@ -2604,10 +2610,12 @@ const SND = {
       case 'sting': [233, 247, 349].forEach((f, k) => this.tone(f, 2.2, .05, 'sawtooth', k * .04)); this.noise(W_, 1.6, 3000, 2, .06, 'bandpass'); break;
       case 'tension': this.tone(48, 3.5, .25, 'sine'); this.tone(51, 3.5, .18, 'sine'); break;
       case 'scream': [196, 207, 293, 311].forEach((f, k) => this.tone(f, 1.6, .09, 'sawtooth', 0, f * .7)); this.noise(W_, 1.4, 1500, 1, .35, 'bandpass', 0, 600); break;
+      case 'jump': this.noise(W_, .55, 2600, .5, .95, 'bandpass', 0, 500); [311, 330, 466, 622, 659].forEach(f => this.tone(f, .9, .15, 'sawtooth', 0, f * .55)); this.tone(62, .9, .95, 'sine', 0, 28); this.noise(B, .7, 200, 1, .95, 'lowpass'); break;
       case 'gulp': this.tone(120, 1.4, .5, 'sine', 0, 30); this.noise(B, 1.4, 300, 1, .5, 'lowpass', 0, 60); break;
     }
   },
   ambience(name) {
+    if (name === 'none') name = null; // silêncio antes do susto
     if (!this.ctx || name === this.ambName) return;
     this.ambName = name;
     const c = this.ctx, t = c.currentTime;
@@ -2783,8 +2791,9 @@ const FX = {
   faceNote() { OBJ.face.material.map = OBJ.faceTexNote; OBJ.face.material.needsUpdate = true; },
   lunge() {
     const f = OBJ.face, p0 = f.position.clone(), tgt = OBJ.being2.worldToLocal(camera.position.clone());
-    tween({ delay: .15, dur: .8, ease: 'in', on: k => { f.position.lerpVectors(p0, tgt, k * .92); f.scale.setScalar(1 + k * .6); } });
-    G.shake = .06; setTimeout(() => G.shake = 0, 1100);
+    tween({ delay: .05, dur: .34, ease: 'in', on: k => { f.position.lerpVectors(p0, tgt, k * .94); f.scale.setScalar(1 + k * .8); } });
+    G.shake = .14; setTimeout(() => G.shake = 0, 700);
+    setVeil({ c: '#fff', o: .7, d: 0 }); setTimeout(() => setVeil({ c: '#9c1d14', o: 1, d: 180 }), 300);
   },
   swallow() { stageEl.classList.remove('gulp'); void stageEl.offsetWidth; stageEl.classList.add('gulp'); },
   lightBlob() { blobEl.classList.remove('go'); void blobEl.offsetWidth; blobEl.classList.add('go'); },
@@ -2793,8 +2802,14 @@ const FX = {
   wallBare() { OBJ.wallBare.visible = true; OBJ.wallNotes.visible = OBJ.markNote.visible = false; OBJ.backGlow.intensity = 1.6; OBJ.collector.visible = false; },
   doorAjar() { const d = OBJ.darkDoor; tween({ delay: .2, dur: 2.2, ease: 'io', on: k => { d.rotation.y = k * .38; OBJ.darkFlood.intensity = k * .9; } }); },
   ruleAlt() { OBJ.ruleNote.material.map = TEX.ruleAlt; OBJ.ruleNote.material.needsUpdate = true; },
-  collectorAppear() { const c = OBJ.collector; c.visible = true; OBJ.collArm.rotation.set(0, 0, 0); tween({ dur: 2.2, ease: 'out', on: k => { c.position.z = 1.25 - k * .5; } }); },
-  collectorTouch() { const a = OBJ.collArm; tween({ delay: .2, dur: 1.6, ease: 'io', on: k => { a.rotation.x = -k * 1.32; a.rotation.z = -k * .28; } }); },
+  collectorAppear() { const c = OBJ.collector; c.visible = true; c.position.set(0, 0, .75); c.rotation.set(0, Math.PI, 0); OBJ.collArm.rotation.set(0, 0, 0); }, // já está lá, imóvel
+  collectorAttack() {
+    const c = OBJ.collector, a = OBJ.collArm;
+    tween({ dur: .22, ease: 'in', on: k => { c.position.z = .75 - k * .32; c.position.y = k * .05; c.rotation.x = k * .3; } });
+    tween({ dur: .18, ease: 'in', on: k => { a.rotation.x = -k * 1.5; a.rotation.z = -k * .38; } });
+    G.shake = .15; setTimeout(() => { G.shake = 0; }, 550);
+    setVeil({ c: '#fff', o: .8, d: 0 }); setTimeout(() => setVeil({ o: 0, d: 240 }), 60);
+  },
   stripOff() { OBJ.stripLight.intensity = 0; OBJ.strip.visible = false; OBJ.backGlow.intensity = 0; OBJ.darkFlood.intensity = 0; },
   resetWorld,
 };
@@ -2812,7 +2827,7 @@ function resetWorld() {
   OBJ.holes.forEach(h => h.scale.setScalar(1)); OBJ.patches.forEach(p => { p.visible = false; });
   OBJ.creepy.visible = false; OBJ.eyes.visible = false; OBJ.monsters.visible = OBJ.crawler.visible = false; OBJ.crawler.position.z = -3.3;
   OBJ.being2.visible = false; OBJ.face.visible = false; OBJ.face.scale.setScalar(1); OBJ.face.material.map = OBJ.faceTex; OBJ.face.material.needsUpdate = true;
-  OBJ.wallNotes.visible = OBJ.markNote.visible = OBJ.wallBare.visible = false; OBJ.backGlow.intensity = 0; OBJ.collector.visible = false; OBJ.collArm.rotation.set(0, 0, 0);
+  OBJ.wallNotes.visible = OBJ.markNote.visible = OBJ.wallBare.visible = false; OBJ.backGlow.intensity = 0; OBJ.collector.visible = false; OBJ.collector.position.set(0, 0, .75); OBJ.collector.rotation.set(0, Math.PI, 0); OBJ.collArm.rotation.set(0, 0, 0);
   OBJ.stripLight.intensity = .9; OBJ.strip.visible = true; OBJ.ruleNote.material.map = TEX.rule; OBJ.ruleNote.material.needsUpdate = true;
   OBJ.paper.visible = false; G.torch = false; G.hudDim = 0; G.shake = 0; torchLight.intensity = 0; CTX.bat = 21; G.hudKey = ''; renderHud();
   noteEl.innerHTML = ''; reachEl.innerHTML = '';
