@@ -254,6 +254,12 @@ svg.layer [class] { transform-box: view-box; transform-origin: 360px 640px; }
 @keyframes strikeFast { from { transform: translate(420px, 760px) rotate(32deg) scale(.8); } }
 #stage.shake { animation: shakeStage .45s; }
 
+/* ---------- porta trancada e chave ---------- */
+.doorRattle { animation: doorRattle .5s .15s linear both; }
+@keyframes doorRattle { 10%, 50%, 90% { transform: translateX(-4px); } 30%, 70% { transform: translateX(4px); } }
+.keySlide { animation: keySlide 1.6s cubic-bezier(.3, .7, .3, 1) both; }
+@keyframes keySlide { from { transform: translateY(-260px); opacity: 0; } 30% { opacity: 1; } }
+
 /* ---------- camadas da versão 3D ---------- */
 #gl, #gl canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #hud3d, #reach, #note, .held, .reachLayer { position: absolute; inset: 0; pointer-events: none; }
@@ -1040,12 +1046,12 @@ function roomDoorBase() {
   s += `<g filter="url(#ink)"><rect x="412" y="738" width="22" height="42" rx="3" fill="#e6e6e6" stroke="${INK}" stroke-width="3"/><circle cx="423" cy="751" r="6" fill="none" stroke="${INK}" stroke-width="2.5"/><rect x="421" y="762" width="4" height="10" fill="${INK}"/></g></g>`;
   return s;
 }
-ART.roomDoor = () => roomDoorBase() + torch();
-ART.roomDoorKnock = () => {
+ART.roomDoor = (b = {}) => roomDoorBase() + (b.noTorch ? '' : torch());
+ART.roomDoorKnock = (b = {}) => {
   let s = roomDoorBase();
   s += `<g class="knockText"><text x="480" y="600" font-family="Patrick Hand SC, cursive" font-size="44" fill="${INK}">Toc</text><text x="486" y="660" font-family="Patrick Hand SC, cursive" font-size="44" fill="${INK}">Toc</text>
     ${inkD('M452,592 l-10,-8 M452,612 l-12,0 M452,632 l-10,8', 3)}</g>`;
-  return s + torch();
+  return s + (b.noTorch ? '' : torch());
 };
 
 /* ---------- abrindo a porta ---------- */
@@ -1609,6 +1615,73 @@ ART.collectorAttack = () => {
 };
 
 /* ============================================================
+   PORTA TRANCADA e CHAVE (porta do corredor vermelho, buraco CHAVE,
+   permanecer no cômodo, as duas portas)
+   ============================================================ */
+'use strict';
+// a porta comum do corredor vermelho, de perto
+ART.redDoorLocked = () => {
+  seed(91);
+  let s = bg('#d9d9d9') + `<rect width="${W}" height="${H}" fill="url(#tunnel)" opacity=".35"/>`;
+  s += hatch(20, 0, 140, 1280, 40, '#000', .12);
+  s += `<g filter="url(#ink)"><path d="M70,-20 C66,300 74,700 64,1300" stroke="${RED}" stroke-width="16" fill="none"/>
+    <path d="M70,1180 C160,1210 230,1250 300,1290" stroke="${RED}" stroke-width="12" fill="none" opacity=".85"/></g>`;
+  s += `<g class="doorRattle">` + rect(170, 120, 400, 1180, '#8e8e8e', `stroke="${INK}" stroke-width="6" filter="url(#ink)"`);
+  s += hatch(180, 130, 560, 1280, 30, '#000', .08);
+  s += `<g filter="url(#ink)"><rect x="486" y="690" width="52" height="130" rx="6" fill="#e6e6e6" stroke="${INK}" stroke-width="4"/>
+    <circle cx="512" cy="725" r="16" fill="#cfcfcf" stroke="${INK}" stroke-width="4"/><path d="M512,768 m-7,0 a7,7 0 1 1 14,0 l-3,3 l3,24 l-14,0 l3,-24 Z" fill="${INK}"/></g></g>`;
+  s += inkD('M560,700 l26,-10 M562,730 l30,0 M560,760 l26,10', 3);
+  return s + vig(.35);
+};
+// a chave velha, pendurada por um fio vermelho, saindo do buraco redondo
+function ironKey(x, y, s = 1, rot = 0) {
+  return `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s})" filter="url(#ink)">
+    <circle cx="0" cy="0" r="34" fill="none" stroke="#2a2a2a" stroke-width="14"/><circle cx="0" cy="0" r="34" fill="none" stroke="${INK}" stroke-width="3"/>
+    <rect x="-7" y="30" width="14" height="150" fill="#3a3a3a" stroke="${INK}" stroke-width="3"/>
+    <path d="M7,140 h26 v14 h-12 v10 h12 v14 h-26 Z" fill="#3a3a3a" stroke="${INK}" stroke-width="3"/>
+    <path d="M-4,40 l0,120" stroke="#6a6a6a" stroke-width="3"/></g>`;
+}
+ART.keyInHole = () => {
+  seed(92);
+  let s = bg('#fbfbfb') + `<rect y="900" width="${W}" height="380" fill="url(#floorFade)"/>`;
+  s += `<g filter="url(#ink)"><ellipse cx="358" cy="560" rx="162" ry="200" fill="#9b9b9b"/><ellipse cx="350" cy="556" rx="150" ry="190" fill="#060606"/>
+    <path d="M380,390 C470,420 500,530 470,690 C450,730 420,740 400,740 C440,660 450,510 380,390 Z" fill="#cfcfcf"/></g>`;
+  s += `<text x="150" y="250" font-family="Patrick Hand SC, cursive" font-size="90" fill="${INK}" letter-spacing="6" filter="url(#ink)">CHAVE</text>`;
+  s += `<g class="keySlide"><path d="M352,600 C356,700 348,780 352,860" stroke="${RED}" stroke-width="6" fill="none" filter="url(#ink)"/>` + ironKey(352, 890, 1.15, 4) + `</g>`;
+  return s + vig(.12);
+};
+// a parede lateral da sala branca, com a porta por onde a pessoa entrou
+ART.roomSideDoor = () => {
+  seed(93);
+  let s = bg('#f7f7f7') + `<rect y="1000" width="${W}" height="280" fill="url(#floorFade)"/>`;
+  s += poly([[0, 300], [360, 360], [360, 960], [0, 1060]], '#e9e9e9') + poly([[360, 360], [720, 330], [720, 1000], [360, 960]], '#f4f4f4');
+  s += ink([[360, 360], [360, 960]], 5) + ink([[-4, 1062], [360, 960], [724, 1004]], 5) + ink([[-4, 298], [360, 360], [724, 328]], 5);
+  s += hatch(330, 370, 358, 950, 14, '#000', .18);
+  s += `<g class="doorSwing">` + poly([[90, 500], [270, 520], [270, 970], [90, 1010]], '#8c8c8c', `stroke="${INK}" stroke-width="5" filter="url(#ink)"`);
+  s += `<g filter="url(#ink)"><rect x="236" y="740" width="20" height="40" rx="3" fill="#e6e6e6" stroke="${INK}" stroke-width="3"/><circle cx="246" cy="753" r="5" fill="none" stroke="${INK}" stroke-width="2.5"/></g></g>`;
+  return s + vig(.2);
+};
+// de volta ao corredor vermelho: agora há duas portas
+ART.twoDoors = () => {
+  seed(94);
+  let s = bg('#cfcfcf') + `<rect width="${W}" height="${H}" fill="url(#tunnel)" opacity=".25"/>`;
+  s += hatch(0, 0, 720, 1280, 60, '#000', .08) + `<rect y="1120" width="${W}" height="160" fill="#bdbdbd"/>`;
+  s += ink([[-10, 1120], [730, 1120]], 5);
+  // molduras vermelhas pintadas no corredor
+  s += `<g filter="url(#ink)"><path d="M30,-20 C20,400 40,800 24,1300" stroke="${RED}" stroke-width="14" fill="none"/><path d="M690,-20 C700,400 684,800 696,1300" stroke="${RED}" stroke-width="12" fill="none"/>
+    <path d="M60,1180 C200,1200 300,1230 420,1240" stroke="${RED}" stroke-width="9" fill="none" opacity=".8"/></g>`;
+  // a porta trancada (a de sempre)
+  s += rect(90, 420, 230, 700, '#8e8e8e', `stroke="${INK}" stroke-width="5" filter="url(#ink)"`);
+  s += `<g filter="url(#ink)"><rect x="282" y="760" width="22" height="54" rx="4" fill="#e6e6e6" stroke="${INK}" stroke-width="3"/><circle cx="293" cy="776" r="6" fill="none" stroke="${INK}" stroke-width="2.5"/></g>`;
+  // a porta nova: mais escura, moldura vermelha pintada à mão, fechadura grande
+  s += rect(400, 420, 230, 700, '#5e5e5e', `stroke="${INK}" stroke-width="5" filter="url(#ink)"`);
+  s += `<path d="${wl([[388, 1124], [386, 408], [642, 404], [644, 1124]], 3, 30)}" stroke="${RED}" stroke-width="10" fill="none" filter="url(#ink)"/>`;
+  s += `<g filter="url(#ink)"><rect x="586" y="740" width="30" height="80" rx="4" fill="#3a3a3a" stroke="${INK}" stroke-width="3"/></g>`;
+  s += `<path d="M601,782 m-8,0 a8,8 0 1 1 16,0 l-3,3 l3,24 l-16,0 l3,-24 Z" fill="#fff" filter="url(#glowW)" class="flick"/>`;
+  return s + vig(.45);
+};
+
+/* ============================================================
    DESTINO 3D — escultura das criaturas
    Cada corpo é um campo de distância (SDF): cápsulas de raio
    variável e elipsoides fundidos com união suave, cavidades
@@ -2082,7 +2155,13 @@ function buildWorld() {
   const bucket = new T3.Mesh(new T3.CylinderGeometry(.17, .14, .34, 14), M(0xc9c9c9)); bucket.position.set(2.3, .17, -8.05); C.add(bucket);
   const paint = new T3.Mesh(new T3.CircleGeometry(.16, 14), red); paint.rotation.x = -Math.PI / 2; paint.position.set(2.3, .33, -8.05); C.add(paint);
   // porta no braço vermelho (caminho não desenhado)
-  box(1, 2.1, .06, M(0x8a8a8a), 7.2, 1.05, -9.99, C);
+  OBJ.oldDoor = box(1, 2.1, .06, M(0x8a8a8a), 7.2, 1.05, -9.99, C);
+  box(.06, .14, .02, M(0xe6e6e6), 7.58, 1.0, -9.95, C);
+  // a porta nova (aparece no caminho da chave): mais escura, moldura vermelha, fechadura grande
+  const ND = new T3.Group(); ND.position.set(8.4, 0, -9.99); C.add(ND); OBJ.newDoor = ND; ND.visible = false;
+  box(1, 2.1, .06, M(0x5e5e5e), 0, 1.05, 0, ND);
+  box(.05, 2.22, .03, red, -.58, 1.1, .03, ND).rotation.z = .02; box(.05, 2.22, .03, red, .58, 1.1, .03, ND).rotation.z = -.015; box(1.2, .05, .03, red, 0, 2.2, .03, ND).rotation.z = .01;
+  box(.08, .2, .02, M(0x3a3a3a), .36, 1.0, .04, ND); const kg = plane(.025, .06, MB(0xffffff), .36, .97, .052, 0, 0, ND); overlayOnly(kg);
 
   /* -- 2. a sala escura com luz sob a porta -- */
   const D = new T3.Group(); D.position.set(60, 0, 0); scene.add(D); OBJ.dark = D;
@@ -2155,6 +2234,17 @@ function buildWorld() {
   OBJ.ruleNote = plane(.2, .25, M(0xffffff, { map: TEX.rule }), 0, 1.85, -2.99, 0, 0, Wr); box(.03, .05, .01, M(0xdddddd), 0, 1.98, -2.985, Wr);
   plane(.5, .25, decal(TEX.chave), .78, 1.88, -2.99, 0, 0, Wr); plane(.3, .3, decal(TEX.quest), -.72, 1.88, -2.99, 0, 0, Wr);
   for (let i = 0; i < 22; i++) { const d = new T3.Mesh(new T3.TetrahedronGeometry(R(.015, .04)), M(0xbdbdbd)); d.position.set(R(-1.1, .1), .02, R(-2.9, -2.4)); d.rotation.set(R(0, 3), R(0, 3), 0); Wr.add(d); }
+  // porta lateral (por onde a pessoa entrou): só aparece no caminho de quem permanece no cômodo
+  const SD = new T3.Group(); SD.position.set(-2.42, 0, 1.5); Wr.add(SD); OBJ.sideDoor = SD; SD.visible = false;
+  box(.04, 2.1, 1, M(0x8c8c8c), 0, 1.05, -.5, SD); box(.02, .15, .07, M(0xe6e6e6), .03, 1.0, -.86, SD);
+  OBJ.sideDark = plane(1, 2.1, MB(0x050505), -2.447, 1.05, 1.0, 0, Math.PI / 2, Wr); OBJ.sideDark.visible = false;
+  // a chave velha, num fio vermelho, dentro do buraco redondo
+  const KY = new T3.Group(); KY.position.set(.7, 1.5, -3.12); Wr.add(KY); OBJ.key = KY; KY.visible = false;
+  { const km = M(0x777774);
+    limb(v3(0, 0, 0), v3(0, -.22, 0), .003, MB(0xc3120c), KY);
+    const ring = new T3.Mesh(new T3.TorusGeometry(.024, .007, 8, 18), km); ring.position.set(0, -.247, 0); KY.add(ring);
+    limb(v3(0, -.271, 0), v3(0, -.37, 0), .006, km, KY);
+    box(.024, .009, .009, km, .012, -.35, 0, KY); box(.018, .009, .009, km, .009, -.366, 0, KY); }
   // porta cinza (parede de trás do jogador)
   const rDoor = new T3.Group(); rDoor.position.set(-.5, 0, 3.03); Wr.add(rDoor); OBJ.roomDoor = rDoor;
   box(1, 2.1, .05, M(0x7a7a7a), .5, 1.05, -.03, rDoor); box(.07, .15, .02, M(0xe6e6e6), .86, 1.0, -.065, rDoor);
@@ -2400,7 +2490,13 @@ const STORY = {
 
   direita: { beats: [
     { cam: [{ p: [0, 1.6, -8.4], l: [0, 1.45, -12], d: 3.4, walk: 1 }, { p: [.15, 1.6, -8.8], l: [10, 1.35, -8.8], d: 2 }], choiceAt: 5600,
-      choice: { q: '?', opts: [['Entrar na porta', 30], ['Seguir o vermelho', 70, 'vermelho']] } },
+      choice: { q: '?', opts: [['Entrar na porta', 30, 'portaTrancada'], ['Seguir o vermelho', 70, 'vermelho']] } },
+  ] },
+
+  /* a porta comum do corredor vermelho: trancada, volta à escolha */
+  portaTrancada: { next: 'direita', nextAt: 0, beats: [
+    { sfx: 'steps', cam: [{ p: [4.5, 1.6, -8.8], l: [7.2, 1.2, -10], d: 2.6, walk: 1 }, { p: [7.15, 1.6, -9.1], l: [7.4, 1.0, -10], d: 2, walk: 1 }], auto: 4700 },
+    { fx: 'doorRattle', sfx: 'locked', type: { t: 'Porta trancada.', col: '#111', y: 12 }, auto: 3000 },
   ] },
 
   vermelho: { beats: [
@@ -2435,6 +2531,25 @@ const STORY = {
     { fx: 'resetWorld', env: 'corridor', amb: 'room', cam: { p: [0, 1.6, 1.3], l: [0, 1.5, -10], cut: 1 }, veil: { c: '#000', o: 0, d: 2800 }, end: true },
   ] },
 
+  /* o buraco CHAVE: a chave, a batida na porta */
+  chave: { beats: [
+    { cam: { p: [120.69, 1.56, -2.25], l: [120.7, 1.45, -3], d: 2.4 }, auto: 2600 },
+    { fx: 'keyOut', sfx: 'knob', auto: 2400 },
+    { fx: 'takeKey', type: { t: 'Você possui uma chave.', col: '#111', y: 10 } },
+    { cam: [{ p: [120, 1.6, -.1], l: [123, 1.5, -.1], d: 1.5 }, { p: [120, 1.6, .2], l: [120, 1.25, 3], d: 1.5 }], auto: 3200 },
+    { fx: 'knock', sfx: 'knock', say: say('Toc<br>&nbsp;&nbsp;Toc', 60, 46, { ink: 1 }),
+      choice: { q: '?', opts: [['Abrir a porta', 78], ['Permanecer no cômodo', 22, 'permanecer']] } },
+  ] },
+
+  /* permanecer no cômodo: volta pela porta lateral até o corredor vermelho, onde agora há duas portas */
+  permanecer: { beats: [
+    { fx: 'sideDoor', sfx: 'steps', cam: { p: [119.1, 1.6, .9], l: [117.5, 1.2, 1.0], d: 2.6, walk: 1 }, auto: 2800 },
+    { fx: 'sideDoorOpen', sfx: 'creak', cam: { p: [118.1, 1.6, 1.0], l: [116.5, 1.4, 1.0], d: 2.4, walk: 1 }, veil: { c: '#000', o: 1, d: 1400, delay: 900 }, auto: 2700 },
+    { env: 'corridor', amb: 'dark', fx: 'twoDoors', sfx: 'steps', cam: { p: [4.6, 1.6, -8.8], l: [7.8, 1.1, -9.9], cut: 1 }, veil: { o: 0, d: 2200 }, auto: 2600 },
+    { sfx: 'steps', cam: { p: [6.1, 1.6, -7.9], l: [7.9, 1.05, -10], d: 3.2, walk: 1 }, choiceAt: 3400,
+      choice: { q: '?', opts: [['Entrar na porta trancada', 50], ['Entrar na porta nova', 50]] } },
+  ] },
+
   abrir1: { beats: [
     { reach: { k: 'knob', skin: '#9c9c9c', shade: '#6a6a6a' }, sfx: 'knob', cam: { p: [60, 1.55, -1.05], l: [60.3, 1.0, -2], d: 2 }, auto: 2300 },
     { fx: 'darkDoorOpen', sfx: 'creak', cam: { p: [60, 1.6, -1.6], l: [60, 1.45, -3], d: 2.6 }, veil: { c: '#fff', o: 1, d: 1800, delay: 900 }, auto: 2900 },
@@ -2444,7 +2559,7 @@ const STORY = {
     { cam: { p: [120.66, 1.62, -2.25], l: [120.74, 1.66, -3], d: 2.4 } },
     { cam: { p: [119.34, 1.62, -2.25], l: [119.28, 1.62, -3], d: 2.2 } },
     { cam: { p: [120, 1.6, -1.1], l: [120, 1.62, -3], d: 2.2 },
-      choice: { q: 'ESCOLHA', opts: [['?', 56, 'buraco'], ['Chave', 44]] } },
+      choice: { q: 'ESCOLHA', opts: [['?', 56, 'buraco'], ['Chave', 44, 'chave']] } },
   ] },
 
   buraco: { beats: [
@@ -2610,6 +2725,7 @@ const SND = {
       case 'sting': [233, 247, 349].forEach((f, k) => this.tone(f, 2.2, .05, 'sawtooth', k * .04)); this.noise(W_, 1.6, 3000, 2, .06, 'bandpass'); break;
       case 'tension': this.tone(48, 3.5, .25, 'sine'); this.tone(51, 3.5, .18, 'sine'); break;
       case 'scream': [196, 207, 293, 311].forEach((f, k) => this.tone(f, 1.6, .09, 'sawtooth', 0, f * .7)); this.noise(W_, 1.4, 1500, 1, .35, 'bandpass', 0, 600); break;
+      case 'locked': [0, .13, .26].forEach(t => { this.noise(W_, .06, 3200, 3, .35, 'bandpass', t); this.tone(170, .08, .22, 'square', t, 110); }); this.noise(B, .16, 280, 1, .55, 'lowpass', .38); break;
       case 'jump': this.noise(W_, .55, 2600, .5, .95, 'bandpass', 0, 500); [311, 330, 466, 622, 659].forEach(f => this.tone(f, .9, .15, 'sawtooth', 0, f * .55)); this.tone(62, .9, .95, 'sine', 0, 28); this.noise(B, .7, 200, 1, .95, 'lowpass'); break;
       case 'gulp': this.tone(120, 1.4, .5, 'sine', 0, 30); this.noise(B, 1.4, 300, 1, .5, 'lowpass', 0, 60); break;
     }
@@ -2811,6 +2927,13 @@ const FX = {
     setVeil({ c: '#fff', o: .8, d: 0 }); setTimeout(() => setVeil({ o: 0, d: 240 }), 60);
   },
   stripOff() { OBJ.stripLight.intensity = 0; OBJ.strip.visible = false; OBJ.backGlow.intensity = 0; OBJ.darkFlood.intensity = 0; },
+  // ---- porta trancada e chave ----
+  doorRattle() { const d = OBJ.oldDoor; [0, .13, .26].forEach(t => tween({ delay: t, dur: .1, ease: 'lin', on: k => { d.position.x = 7.2 + Math.sin(k * Math.PI) * .012; } })); },
+  keyOut() { const k = OBJ.key; k.visible = true; k.position.z = -3.12; tween({ dur: 1.4, ease: 'out', on: t => { k.position.z = -3.12 + t * .2; k.rotation.z = Math.sin(t * 9) * .15 * (1 - t); } }); },
+  takeKey() { const k = OBJ.key, z0 = k.position.z; tween({ dur: .9, ease: 'in', on: t => { k.position.z = z0 + t * .5; k.position.y = 1.5 + t * .32; }, done: () => { k.visible = false; } }); },
+  sideDoor() { OBJ.sideDoor.visible = OBJ.sideDark.visible = true; OBJ.sideDoor.rotation.y = 0; },
+  sideDoorOpen() { const d = OBJ.sideDoor; tween({ delay: .2, dur: 2, ease: 'io', on: k => { d.rotation.y = -k * 1.4; } }); },
+  twoDoors() { OBJ.newDoor.visible = true; },
   resetWorld,
 };
 function dropPaper(from, to, keep) {
@@ -2829,6 +2952,7 @@ function resetWorld() {
   OBJ.being2.visible = false; OBJ.face.visible = false; OBJ.face.scale.setScalar(1); OBJ.face.material.map = OBJ.faceTex; OBJ.face.material.needsUpdate = true;
   OBJ.wallNotes.visible = OBJ.markNote.visible = OBJ.wallBare.visible = false; OBJ.backGlow.intensity = 0; OBJ.collector.visible = false; OBJ.collector.position.set(0, 0, .75); OBJ.collector.rotation.set(0, Math.PI, 0); OBJ.collArm.rotation.set(0, 0, 0);
   OBJ.stripLight.intensity = .9; OBJ.strip.visible = true; OBJ.ruleNote.material.map = TEX.rule; OBJ.ruleNote.material.needsUpdate = true;
+  OBJ.key.visible = false; OBJ.key.position.set(.7, 1.5, -3.12); OBJ.sideDoor.visible = OBJ.sideDark.visible = false; OBJ.sideDoor.rotation.y = 0; OBJ.newDoor.visible = false; OBJ.oldDoor.position.x = 7.2;
   OBJ.paper.visible = false; G.torch = false; G.hudDim = 0; G.shake = 0; torchLight.intensity = 0; CTX.bat = 21; G.hudKey = ''; renderHud();
   noteEl.innerHTML = ''; reachEl.innerHTML = '';
   stageEl.classList.remove('gulp');
@@ -3010,7 +3134,22 @@ $('#begin').addEventListener('click', e => { e.stopPropagation(); start(); });
 
 /* teste: aplica o caminho inteiro até um ponto, sem esperar */
 function flushTweens() { let n = 0; while (tweens.length && n++ < 500) { const o = tweens.shift(); o.on(1, 1); o.done && o.done(); } }
+/* rota de 'inicio' até o trecho pedido, pelas escolhas e pelos 'next' */
+function routeTo(target) {
+  const seen = new Set(), q = [['inicio']];
+  while (q.length) {
+    const path = q.shift(), n = path[path.length - 1];
+    if (n === target) return path;
+    if (seen.has(n) || !STORY[n]) continue; seen.add(n);
+    const node = STORY[n], last = node.beats[node.beats.length - 1], outs = [];
+    if (last.choice) last.choice.opts.forEach(o => { const r = routeFor(o[2]); if (r) outs.push(r); });
+    if (node.next) outs.push(node.next);
+    outs.forEach(o => q.push(path.concat(o)));
+  }
+  return null;
+}
 function seek(node, idx) {
+  const route = routeTo(node) || ['inicio'];
   let nd = 'inicio', i = 0;
   let guard = 0;
   while (!(nd === node && i === idx) && guard++ < 400) {
@@ -3025,7 +3164,7 @@ function seek(node, idx) {
     if (b.fx) [].concat(b.fx).forEach(f => FX[f] && FX[f](b));
     flushTweens(); G.shake = 0;
     if (b.flag) G.flags[b.flag] = true;
-    if (b.choice) { const hit = b.choice.opts.find(o => routeFor(o[2]) === node), main = b.choice.opts.filter(o => routeFor(o[2])).sort((a, c) => c[1] - a[1])[0]; nd = routeFor((hit || main)[2]); i = 0; } else i++; // segue o caminho principal, ou desvia para o trecho pedido
+    if (b.choice) { const want = route[route.indexOf(nd) + 1], hit = b.choice.opts.find(o => routeFor(o[2]) === want), main = b.choice.opts.filter(o => routeFor(o[2])).sort((a, c) => c[1] - a[1])[0]; nd = routeFor((hit || main)[2]); i = 0; } else i++; // segue a rota até o trecho pedido
   }
   G.node = node; G.i = idx; renderHud(); // trechos fora do caminho desenhado começam direto noteEl.innerHTML = ''; reachEl.innerHTML = '';
 }

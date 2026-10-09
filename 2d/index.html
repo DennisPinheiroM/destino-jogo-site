@@ -254,6 +254,12 @@ svg.layer [class] { transform-box: view-box; transform-origin: 360px 640px; }
 @keyframes strikeFast { from { transform: translate(420px, 760px) rotate(32deg) scale(.8); } }
 #stage.shake { animation: shakeStage .45s; }
 
+/* ---------- porta trancada e chave ---------- */
+.doorRattle { animation: doorRattle .5s .15s linear both; }
+@keyframes doorRattle { 10%, 50%, 90% { transform: translateX(-4px); } 30%, 70% { transform: translateX(4px); } }
+.keySlide { animation: keySlide 1.6s cubic-bezier(.3, .7, .3, 1) both; }
+@keyframes keySlide { from { transform: translateY(-260px); opacity: 0; } 30% { opacity: 1; } }
+
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -989,12 +995,12 @@ function roomDoorBase() {
   s += `<g filter="url(#ink)"><rect x="412" y="738" width="22" height="42" rx="3" fill="#e6e6e6" stroke="${INK}" stroke-width="3"/><circle cx="423" cy="751" r="6" fill="none" stroke="${INK}" stroke-width="2.5"/><rect x="421" y="762" width="4" height="10" fill="${INK}"/></g></g>`;
   return s;
 }
-ART.roomDoor = () => roomDoorBase() + torch();
-ART.roomDoorKnock = () => {
+ART.roomDoor = (b = {}) => roomDoorBase() + (b.noTorch ? '' : torch());
+ART.roomDoorKnock = (b = {}) => {
   let s = roomDoorBase();
   s += `<g class="knockText"><text x="480" y="600" font-family="Patrick Hand SC, cursive" font-size="44" fill="${INK}">Toc</text><text x="486" y="660" font-family="Patrick Hand SC, cursive" font-size="44" fill="${INK}">Toc</text>
     ${inkD('M452,592 l-10,-8 M452,612 l-12,0 M452,632 l-10,8', 3)}</g>`;
-  return s + torch();
+  return s + (b.noTorch ? '' : torch());
 };
 
 /* ---------- abrindo a porta ---------- */
@@ -1558,6 +1564,73 @@ ART.collectorAttack = () => {
 };
 
 /* ============================================================
+   PORTA TRANCADA e CHAVE (porta do corredor vermelho, buraco CHAVE,
+   permanecer no cômodo, as duas portas)
+   ============================================================ */
+'use strict';
+// a porta comum do corredor vermelho, de perto
+ART.redDoorLocked = () => {
+  seed(91);
+  let s = bg('#d9d9d9') + `<rect width="${W}" height="${H}" fill="url(#tunnel)" opacity=".35"/>`;
+  s += hatch(20, 0, 140, 1280, 40, '#000', .12);
+  s += `<g filter="url(#ink)"><path d="M70,-20 C66,300 74,700 64,1300" stroke="${RED}" stroke-width="16" fill="none"/>
+    <path d="M70,1180 C160,1210 230,1250 300,1290" stroke="${RED}" stroke-width="12" fill="none" opacity=".85"/></g>`;
+  s += `<g class="doorRattle">` + rect(170, 120, 400, 1180, '#8e8e8e', `stroke="${INK}" stroke-width="6" filter="url(#ink)"`);
+  s += hatch(180, 130, 560, 1280, 30, '#000', .08);
+  s += `<g filter="url(#ink)"><rect x="486" y="690" width="52" height="130" rx="6" fill="#e6e6e6" stroke="${INK}" stroke-width="4"/>
+    <circle cx="512" cy="725" r="16" fill="#cfcfcf" stroke="${INK}" stroke-width="4"/><path d="M512,768 m-7,0 a7,7 0 1 1 14,0 l-3,3 l3,24 l-14,0 l3,-24 Z" fill="${INK}"/></g></g>`;
+  s += inkD('M560,700 l26,-10 M562,730 l30,0 M560,760 l26,10', 3);
+  return s + vig(.35);
+};
+// a chave velha, pendurada por um fio vermelho, saindo do buraco redondo
+function ironKey(x, y, s = 1, rot = 0) {
+  return `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${s})" filter="url(#ink)">
+    <circle cx="0" cy="0" r="34" fill="none" stroke="#2a2a2a" stroke-width="14"/><circle cx="0" cy="0" r="34" fill="none" stroke="${INK}" stroke-width="3"/>
+    <rect x="-7" y="30" width="14" height="150" fill="#3a3a3a" stroke="${INK}" stroke-width="3"/>
+    <path d="M7,140 h26 v14 h-12 v10 h12 v14 h-26 Z" fill="#3a3a3a" stroke="${INK}" stroke-width="3"/>
+    <path d="M-4,40 l0,120" stroke="#6a6a6a" stroke-width="3"/></g>`;
+}
+ART.keyInHole = () => {
+  seed(92);
+  let s = bg('#fbfbfb') + `<rect y="900" width="${W}" height="380" fill="url(#floorFade)"/>`;
+  s += `<g filter="url(#ink)"><ellipse cx="358" cy="560" rx="162" ry="200" fill="#9b9b9b"/><ellipse cx="350" cy="556" rx="150" ry="190" fill="#060606"/>
+    <path d="M380,390 C470,420 500,530 470,690 C450,730 420,740 400,740 C440,660 450,510 380,390 Z" fill="#cfcfcf"/></g>`;
+  s += `<text x="150" y="250" font-family="Patrick Hand SC, cursive" font-size="90" fill="${INK}" letter-spacing="6" filter="url(#ink)">CHAVE</text>`;
+  s += `<g class="keySlide"><path d="M352,600 C356,700 348,780 352,860" stroke="${RED}" stroke-width="6" fill="none" filter="url(#ink)"/>` + ironKey(352, 890, 1.15, 4) + `</g>`;
+  return s + vig(.12);
+};
+// a parede lateral da sala branca, com a porta por onde a pessoa entrou
+ART.roomSideDoor = () => {
+  seed(93);
+  let s = bg('#f7f7f7') + `<rect y="1000" width="${W}" height="280" fill="url(#floorFade)"/>`;
+  s += poly([[0, 300], [360, 360], [360, 960], [0, 1060]], '#e9e9e9') + poly([[360, 360], [720, 330], [720, 1000], [360, 960]], '#f4f4f4');
+  s += ink([[360, 360], [360, 960]], 5) + ink([[-4, 1062], [360, 960], [724, 1004]], 5) + ink([[-4, 298], [360, 360], [724, 328]], 5);
+  s += hatch(330, 370, 358, 950, 14, '#000', .18);
+  s += `<g class="doorSwing">` + poly([[90, 500], [270, 520], [270, 970], [90, 1010]], '#8c8c8c', `stroke="${INK}" stroke-width="5" filter="url(#ink)"`);
+  s += `<g filter="url(#ink)"><rect x="236" y="740" width="20" height="40" rx="3" fill="#e6e6e6" stroke="${INK}" stroke-width="3"/><circle cx="246" cy="753" r="5" fill="none" stroke="${INK}" stroke-width="2.5"/></g></g>`;
+  return s + vig(.2);
+};
+// de volta ao corredor vermelho: agora há duas portas
+ART.twoDoors = () => {
+  seed(94);
+  let s = bg('#cfcfcf') + `<rect width="${W}" height="${H}" fill="url(#tunnel)" opacity=".25"/>`;
+  s += hatch(0, 0, 720, 1280, 60, '#000', .08) + `<rect y="1120" width="${W}" height="160" fill="#bdbdbd"/>`;
+  s += ink([[-10, 1120], [730, 1120]], 5);
+  // molduras vermelhas pintadas no corredor
+  s += `<g filter="url(#ink)"><path d="M30,-20 C20,400 40,800 24,1300" stroke="${RED}" stroke-width="14" fill="none"/><path d="M690,-20 C700,400 684,800 696,1300" stroke="${RED}" stroke-width="12" fill="none"/>
+    <path d="M60,1180 C200,1200 300,1230 420,1240" stroke="${RED}" stroke-width="9" fill="none" opacity=".8"/></g>`;
+  // a porta trancada (a de sempre)
+  s += rect(90, 420, 230, 700, '#8e8e8e', `stroke="${INK}" stroke-width="5" filter="url(#ink)"`);
+  s += `<g filter="url(#ink)"><rect x="282" y="760" width="22" height="54" rx="4" fill="#e6e6e6" stroke="${INK}" stroke-width="3"/><circle cx="293" cy="776" r="6" fill="none" stroke="${INK}" stroke-width="2.5"/></g>`;
+  // a porta nova: mais escura, moldura vermelha pintada à mão, fechadura grande
+  s += rect(400, 420, 230, 700, '#5e5e5e', `stroke="${INK}" stroke-width="5" filter="url(#ink)"`);
+  s += `<path d="${wl([[388, 1124], [386, 408], [642, 404], [644, 1124]], 3, 30)}" stroke="${RED}" stroke-width="10" fill="none" filter="url(#ink)"/>`;
+  s += `<g filter="url(#ink)"><rect x="586" y="740" width="30" height="80" rx="4" fill="#3a3a3a" stroke="${INK}" stroke-width="3"/></g>`;
+  s += `<path d="M601,782 m-8,0 a8,8 0 1 1 16,0 l-3,3 l3,24 l-16,0 l3,-24 Z" fill="#fff" filter="url(#glowW)" class="flick"/>`;
+  return s + vig(.45);
+};
+
+/* ============================================================
    DESTINO — roteiro (ciclo I), na ordem dos quadros originais.
    Em cada escolha, a opção com caminho desenhado leva "go";
    as demais aparecem com a porcentagem da votação, travadas.
@@ -1570,7 +1643,12 @@ const STORY = {
   ] },
 
   direita: { beats: [
-    { art: 'corridorRed', choice: { q: '?', opts: [['Entrar na porta', 30], ['Seguir o vermelho', 70, 'vermelho']] } },
+    { art: 'corridorRed', choice: { q: '?', opts: [['Entrar na porta', 30, 'portaTrancada'], ['Seguir o vermelho', 70, 'vermelho']] } },
+  ] },
+
+  /* a porta comum do corredor vermelho: trancada, volta à escolha */
+  portaTrancada: { next: 'direita', nextAt: 0, beats: [
+    { art: 'redDoorLocked', t: 700, sfx: 'locked', type: { t: 'Porta trancada.', col: '#111', y: 12 }, auto: 3200 },
   ] },
 
   vermelho: { beats: [
@@ -1603,6 +1681,23 @@ const STORY = {
     { art: 'corridorEnd', t: 1600, end: true, amb: 'room' },
   ] },
 
+  /* o buraco CHAVE: a chave, a batida na porta */
+  chave: { beats: [
+    { art: 'holeChave', t: 800, auto: 2600 },
+    { art: 'keyInHole', t: 700, sfx: 'knob', auto: 2600 },
+    { art: 'keyInHole', type: { t: 'Você possui uma chave.', col: '#111', y: 10 } },
+    { art: 'roomDoor', args: { noTorch: 1 }, t: 1000, sfx: 'steps', auto: 2400 },
+    { art: 'roomDoorKnock', args: { noTorch: 1 }, t: 0, sfx: 'knock', choice: { q: '?', opts: [['Abrir a porta', 78], ['Permanecer no cômodo', 22, 'permanecer']] } },
+  ] },
+
+  /* permanecer no cômodo: volta pela porta lateral até o corredor vermelho, onde agora há duas portas */
+  permanecer: { beats: [
+    { art: 'roomSideDoor', t: 900, sfx: 'creak', auto: 3400 },
+    { art: 'black', t: 900, sfx: 'steps', amb: 'dark', auto: 2400 },
+    { art: 'corridorRed', t: 1200, sfx: 'steps', auto: 3000 },
+    { art: 'twoDoors', t: 900, choice: { q: '?', opts: [['Entrar na porta trancada', 50], ['Entrar na porta nova', 50]] } },
+  ] },
+
   abrir1: { beats: [
     { art: 'knobHand', sfx: 'knob' },
     { art: 'pushPlate', sfx: 'creak' },
@@ -1611,7 +1706,7 @@ const STORY = {
     { art: 'noteRule', alt: { flag: 'olhouTras', art: 'noteRuleAlt' }, sfx: 'paper' },
     { art: 'holeChave' },
     { art: 'holeQ' },
-    { art: 'roomHoles', choice: { q: 'ESCOLHA', opts: [['?', 56, 'buraco'], ['Chave', 44]] } },
+    { art: 'roomHoles', choice: { q: 'ESCOLHA', opts: [['?', 56, 'buraco'], ['Chave', 44, 'chave']] } },
   ] },
 
   buraco: { beats: [
@@ -1782,6 +1877,7 @@ const SND = {
       case 'sting': [233, 247, 349].forEach((f, k) => this.tone(f, 2.2, .05, 'sawtooth', k * .04)); this.noise(W_, 1.6, 3000, 2, .06, 'bandpass'); break;
       case 'tension': this.tone(48, 3.5, .25, 'sine'); this.tone(51, 3.5, .18, 'sine'); break;
       case 'scream': [196, 207, 293, 311].forEach((f, k) => this.tone(f, 1.6, .09, 'sawtooth', 0, f * .7)); this.noise(W_, 1.4, 1500, 1, .35, 'bandpass', 0, 600); break;
+      case 'locked': [0, .13, .26].forEach(t => { this.noise(W_, .06, 3200, 3, .35, 'bandpass', t); this.tone(170, .08, .22, 'square', t, 110); }); this.noise(B, .16, 280, 1, .55, 'lowpass', .38); break;
       case 'jump': this.noise(W_, .55, 2600, .5, .95, 'bandpass', 0, 500); [311, 330, 466, 622, 659].forEach(f => this.tone(f, .9, .15, 'sawtooth', 0, f * .55)); this.tone(62, .9, .95, 'sine', 0, 28); this.noise(B, .7, 200, 1, .95, 'lowpass'); break;
       case 'gulp': this.tone(120, 1.4, .5, 'sine', 0, 30); this.noise(B, 1.4, 300, 1, .5, 'lowpass', 0, 60); break;
     }
