@@ -227,6 +227,26 @@ svg.layer [class] { transform-box: view-box; transform-origin: 360px 640px; }
 @media (prefers-reduced-motion: reduce) { #lids { display: none !important; } #stage.waking #layers, #stage.waking #gl { animation-name: wakeBlurCalm; } }
 @keyframes wakeBlurCalm { from { filter: blur(18px) brightness(.35); } to { filter: blur(0) brightness(1); } }
 
+/* ---------- impressão digital do Recolhedor, colada na "lente" ---------- */
+#print { position: absolute; left: 50%; top: 46%; width: 42%; transform: translate(-50%, -50%) rotate(-14deg); z-index: 3; pointer-events: none; opacity: .92; }
+#print svg { width: 100%; height: auto; display: block; }
+#print.on { animation: pressPrint .35s ease-out both; }
+@keyframes pressPrint { from { opacity: 0; transform: translate(-50%, -50%) rotate(-14deg) scale(1.15); } }
+
+/* ---------- Olhar para trás ---------- */
+.eyesAdjust { animation: eyesAdjust 4.5s ease-out both; }
+@keyframes eyesAdjust { from { opacity: .04; } to { opacity: .55; } }
+.doorGapOpen { transform-origin: 567px 600px !important; animation: gapGrow 2.4s ease-out both; }
+@keyframes gapGrow { from { transform: scaleX(.2); opacity: .2; } }
+.breathPaper { animation: breathPaper 3.2s ease-in-out infinite; }
+@keyframes breathPaper { 50% { transform: translateY(-3px) scale(1.004); } }
+.faceNoteBreath { transform-origin: 360px 330px !important; animation: faceNoteBreath 2.6s ease-in-out infinite; }
+@keyframes faceNoteBreath { 50% { transform: scaleY(1.025) translateY(-4px); } }
+.tiltUpSlow { animation: tiltUpSlow 6s cubic-bezier(.4, 0, .3, 1) both; }
+@keyframes tiltUpSlow { from { transform: translateY(-260px); } to { transform: translateY(160px); } }
+.handRise { animation: handRise 2s cubic-bezier(.3, .7, .3, 1) both; }
+@keyframes handRise { from { transform: translateY(620px); } }
+
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -302,6 +322,7 @@ svg.layer [class] { transform-box: view-box; transform-origin: 360px 640px; }
     <div class="grain" aria-hidden="true"></div>
     <div id="flash" aria-hidden="true"></div>
     <div id="lids" aria-hidden="true"><i></i><i></i></div>
+    <div id="print" hidden><svg viewBox="0 0 100 124" aria-hidden="true"><ellipse cx="50" cy="62" rx="44" ry="52" fill="#a3120c" opacity=".16"/><path d="M47.7,67.9 L47.3,67.3 L46.8,67.1 L46.4,66.6 L46.1,66.0 L45.7,65.5 L45.6,64.8 L45.2,64.3 L45.2,63.6 L45.1,62.9 L44.9,62.2 M45.3,59.8 L45.4,59.1 L45.6,58.4 L46.0,58.0 L46.3,57.5 L46.6,56.9 L47.2,56.8 L47.5,56.2 L48.1,56.1 L48.6,55.9 L49.1,55.8 M50.2,55.6 L50.7,55.5 L51.2,55.6 L51.7,55.9 L52.2,56.1 L52.6,56.6 L53.0,57.0 L53.4,57.3 L53.9,57.7 L54.2,58.3 L54.4,58.9 L54.7,59.4 L54.9,60.1 L54.9,60.7 L55.2,61.4 L55.2,62.0 L55.0,62.7 L55.0,63.4 L54.9,64.0 L54.8,64.7 L54.5,65.3 L54.1,65.8 L53.9,66.5 M53.3,67.1 L52.7,67.3 L52.3,67.8 L51.8,67.9 L51.4,68.3 L50.8,68.5 L50.3,68.5 L49.8,68.6 L49.3,68.4 L48.7,68.4 L48.2,68.1 L47.7,67.9 M54.3,53.6 L55.0,54.0 L55.4,55.0 L56.2,55.4 L56.6,56.2 L57.2,57.0 L57.5,58.0 L57.5,59.0 L57.8,59.9 L58.0,60.9 L57.8,61.9 L57.9,62.9 L57.7,63.9 L57.5,64.8 L57.2,65.7 L57.2,66.8 L56.5,67.5 L56.1,68.3 L55.6,69.1 L55.1,70.0 L54.3,70.2 L53.7,70.8 L53.0,71.3 L52.3,71.8 L51.4,72.0 L50.6,72.2 M48.9,71.8 L48.1,71.9 L47.3,71.7 L46.6,70.8 L45.9,70.4 L45.2,69.8 L44.6,69.2 L44.0,68.6 L43.4,67.8 L43.1,66.8 L42.9,65.8 L42.4,65.0 L42.2,64.0 L42.0,63.0 L41.8,61.9 L42.0,60.9 M42.6,58.1 L43.2,57.3 L43.3,56.2 L43.8,55.4 L44.3,54.6 L45.0,54.0 L45.8,53.6 L46.5,53.1 L47.3,52.9 L48.0,52.2 L48.8,52.4 L49.6,52.3 L50.4,52.2 L51.2,52.3 L52.0,52.4 L52.7,52.9 L53.4,53.3 L54.2,53.7 M42.7,72.4 L42.0,71.3 L41.5,70.0 L40.8,68.8 L40.2,67.6 L39.8,66.3 L39.6,64.9 L38.9,63.6 L38.8,62.2 M39.7,58.6 L40.1,57.3 L40.4,55.9 L41.0,54.8 L41.4,53.4 L42.4,52.7 L43.3,51.8 L43.9,50.4 L45.0,50.0 L46.1,49.7 L47.1,48.9 L48.3,49.1 L49.4,48.5 L50.5,48.1 L51.7,48.4 L52.8,48.8 L53.8,49.6 M56.3,50.7 L57.1,51.7 L58.0,52.5 L58.5,53.7 L59.0,54.9 L59.9,55.8 L60.5,57.0 L60.7,58.4 L60.9,59.7 L61.1,61.1 L61.1,62.4 L60.6,63.8 M59.7,67.4 L59.2,68.6 L58.7,69.8 L58.0,70.9 L57.4,72.1 L56.6,73.2 L55.5,73.6 L54.6,74.6 L53.6,75.2 L52.5,75.5 L51.3,75.3 L50.2,75.3 L49.1,75.2 L48.0,75.0 L46.9,74.7 M43.6,73.2 L43.4,72.7 L43.1,72.6 L42.8,72.4 M42.5,47.4 L43.8,46.6 L45.1,46.1 L46.5,45.9 L47.8,44.9 L49.2,45.2 L50.6,44.7 L52.1,44.7 L53.4,45.6 L54.7,46.1 L56.2,46.3 L57.3,47.3 L58.2,48.8 L59.3,49.9 L60.2,51.1 L61.6,52.0 L62.3,53.6 L62.4,55.4 L63.4,56.8 L63.9,58.4 L63.9,60.2 L63.7,62.0 L63.8,63.7 L63.2,65.3 L62.8,66.9 M60.2,73.5 L59.4,75.1 L58.0,75.8 L57.0,77.1 L55.6,77.9 L54.1,77.9 L52.8,78.4 L51.4,78.7 L50.0,78.7 L48.5,79.0 L47.2,78.4 L45.8,78.1 L44.5,77.2 L43.0,77.1 L42.0,75.7 L40.8,74.7 L39.8,73.5 L38.6,72.3 L38.2,70.6 L37.1,69.2 M36.3,64.4 L36.6,62.6 L36.3,60.9 L36.7,59.2 L37.1,57.5 L36.9,55.6 L38.0,54.3 L38.5,52.6 L39.2,51.0 L40.3,49.8 L41.5,48.8 L42.6,47.6 M53.5,41.9 L55.2,42.9 L56.9,43.6 L58.8,44.2 L60.2,45.7 L61.6,47.1 L63.0,48.6 L64.2,50.4 L64.8,52.6 L65.7,54.6 M66.8,60.3 L66.6,62.4 L66.6,64.5 L66.3,66.5 L66.2,68.7 L65.4,70.6 L64.8,72.6 L63.9,74.4 L62.3,75.5 L61.3,77.2 L60.2,78.9 L58.7,80.0 L56.9,80.2 L55.4,80.9 L53.8,81.9 L52.1,81.8 L50.5,82.2 L48.8,81.9 M43.2,81.2 L42.0,79.5 L40.3,79.0 L39.0,77.6 L38.1,75.8 L36.5,74.8 L35.4,73.1 L35.3,70.9 L33.9,69.3 L33.9,67.1 L33.5,65.1 L32.8,63.1 L33.0,61.0 L33.8,59.0 L33.9,57.0 L34.3,55.0 L35.1,53.2 L36.0,51.5 L36.9,49.7 L37.6,47.8 L39.3,47.0 L40.3,45.3 L41.8,44.3 M43.6,42.9 L45.2,42.4 L46.9,42.4 L48.4,41.0 L50.2,41.1 L51.9,41.0 L53.4,42.4 M68.7,67.8 L68.0,70.0 L67.6,72.4 L67.1,74.8 L65.9,76.8 L64.1,78.1 L62.7,79.6 L61.7,82.0 L59.8,82.9 L58.1,84.2 L56.0,84.2 L54.2,84.8 L52.4,86.1 L50.4,85.9 L48.5,85.3 L46.4,86.2 L44.6,85.3 L42.6,84.7 L41.2,82.8 L39.0,82.5 L38.0,80.2 L35.9,79.4 L34.9,77.2 M32.0,72.9 L31.9,70.2 L31.4,67.8 L30.6,65.4 L30.7,62.9 L30.9,60.4 L31.1,57.9 L31.7,55.5 L32.2,53.1 L32.9,50.8 L34.0,48.7 L34.8,46.2 L36.6,44.9 L38.0,43.0 L39.9,41.9 L41.6,40.5 L43.7,40.0 L45.5,39.0 M47.9,38.1 L49.9,38.4 L51.8,38.1 L53.9,37.8 L55.6,39.6 L57.7,39.4 L59.3,41.0 L61.1,42.2 L62.9,43.3 L64.0,45.4 L65.4,47.2 L66.7,49.0 L68.0,51.0 L68.2,53.6 L69.3,55.7 L69.6,58.1 L69.7,60.6 L69.5,63.0 L69.2,65.4 L68.5,67.7 M70.0,73.6 L68.8,76.0 L67.5,78.2 L66.8,81.1 L65.2,83.1 L63.2,84.6 L61.0,85.6 L58.9,86.8 L56.9,87.8 L54.7,88.8 L52.4,88.8 L50.2,89.4 L48.0,89.0 L45.5,89.7 L43.3,89.1 L41.3,87.4 L39.4,85.8 L36.9,85.3 L35.6,82.8 L33.9,80.9 L32.8,78.5 L31.1,76.6 M28.8,69.7 L27.9,67.1 L28.3,64.3 L27.8,61.6 L28.2,59.0 L28.1,56.2 L29.2,53.7 L30.0,51.2 L30.6,48.6 L31.9,46.4 L32.9,43.9 L34.6,41.9 L36.1,39.9 L38.0,38.4 L40.0,37.0 L42.0,35.6 L44.4,35.6 L46.6,35.1 M56.6,35.3 L58.8,36.4 L60.6,38.6 L63.2,39.0 L65.2,40.8 L66.7,43.2 L68.3,45.4 L69.8,47.8 L70.1,50.9 L71.4,53.4 L72.0,56.3 M72.5,67.2 L71.8,69.4 L71.6,71.8 L70.6,73.9 M53.1,92.1 L50.5,92.7 L47.8,92.2 L45.0,93.0 L42.4,91.7 L39.8,90.7 L37.4,89.2 L35.0,87.5 L33.1,85.1 M30.6,82.8 L29.3,80.0 L27.9,77.4 L26.5,74.6 L26.5,71.3 L24.8,68.6 L25.1,65.4 L25.2,62.3 L25.1,59.2 L24.7,55.9 L26.1,53.1 L26.2,49.8 L27.1,46.7 L29.1,44.5 L30.7,42.1 L32.4,39.7 L34.2,37.3 L36.2,35.4 L38.6,34.1 L41.0,32.7 L43.7,32.8 L46.1,32.0 L48.6,31.5 M57.8,32.4 L59.9,34.4 L62.2,35.8 L64.6,37.1 L67.0,38.6 L68.9,40.8 L70.6,43.3 L71.6,46.4 L73.1,49.0 L74.0,52.0 L74.7,55.1 L74.6,58.4 L76.0,61.5 L74.8,64.6 M71.3,77.2 L70.5,80.2 L69.3,83.1 L67.6,85.6 L65.0,86.9 L62.8,88.3 L60.5,89.6 L58.5,92.1 L55.7,91.7 L53.3,92.9 M22.6,57.0 L22.1,53.3 L23.4,50.1 L23.9,46.6 L25.6,43.7 L27.9,41.4 L28.9,37.8 L31.4,36.0 L34.1,34.7 L36.5,32.9 L38.6,30.4 L41.3,29.3 L44.1,28.7 L46.9,28.5 L49.6,27.8 L52.5,28.0 L55.4,27.4 L57.8,29.9 L60.9,29.6 L63.6,30.9 L65.4,34.0 L68.5,34.7 L70.4,37.5 L72.6,39.8 L73.4,43.4 L74.9,46.3 M77.7,54.2 L77.8,57.8 L78.2,61.3 L77.8,64.9 L77.0,68.3 L76.5,71.7 L76.6,75.6 L74.5,78.3 L73.9,82.1 L71.2,84.1 L69.2,86.7 L67.3,89.4 L64.5,90.8 L62.1,92.9 L59.8,95.4 L56.9,96.3 L53.9,96.8 L50.9,96.8 L47.9,97.3 L44.9,96.9 L42.2,95.3 L39.3,94.4 L37.1,91.7 L34.0,91.0 L31.9,88.4 L29.4,86.4 M25.1,76.3 L22.5,73.2 L22.9,68.9 L21.9,65.0 L22.0,61.0 L22.3,57.0 M81.1,56.2 L80.8,60.3 L81.3,64.3 L80.6,68.2 L79.5,72.0 L78.4,75.7 L77.2,79.3 L76.6,83.6 L74.0,86.3 L71.4,88.8 L69.7,92.6 L67.1,95.1 L63.7,96.0 M58.7,97.5 L55.7,99.0 L52.4,98.9 L49.3,99.4 L46.1,99.1 L42.8,99.1 L39.4,98.7 L36.5,96.9 L33.9,94.3 L31.2,92.1 L28.6,89.7 L26.6,86.7 M22.7,79.4 L20.2,76.5 L20.7,72.2 L19.3,68.7 L18.6,64.9 L18.1,61.0 L19.6,57.3 L20.0,53.5 L20.9,49.9 L21.8,46.2 M25.6,37.1 L27.8,34.1 L31.3,33.0 L33.9,30.7 L36.1,27.5 L39.0,25.5 L42.3,25.2 L45.5,24.2 L48.8,25.2 L52.0,24.3 L55.3,23.6 L58.5,24.7 L61.7,25.9 L64.8,27.3 L66.9,30.8 L69.3,33.3 L71.7,35.8 L74.4,38.2 L76.5,41.2 L78.6,44.4 L79.6,48.3 L80.4,52.2 L81.3,56.0 M17.1,48.7 L19.5,45.0 L20.0,40.1 L22.6,36.7 L25.5,33.8 L28.4,31.1 L31.2,28.2 L33.9,25.0 L37.3,23.0 M42.5,21.4 L46.0,20.6 L49.5,20.8 L53.0,21.3 L56.5,21.0 L59.6,23.4 L63.0,24.2 L66.3,25.7 L69.9,26.9 L72.3,30.1 M80.2,44.1 L81.5,48.0 L84.0,51.6 L84.2,56.0 L83.7,60.4 L83.1,64.6 L83.6,68.9 L83.2,73.2 L81.6,77.1 L79.8,80.8 L78.8,85.0 L77.1,88.9 L73.6,90.9 L70.8,93.4 L68.4,96.5 L65.4,98.8 L62.4,101.1 M56.3,103.4 L52.7,103.4 L49.2,102.8 L45.5,104.3 L42.3,101.9 L38.6,101.9 L35.8,99.0 L32.7,97.0 L29.2,95.7 L27.1,92.0 L23.6,90.0 L22.1,85.9 L20.8,81.9 L19.2,78.1 L17.6,74.3 L16.2,70.3 L15.1,66.1 L16.6,61.7 L16.3,57.4 L17.3,53.3 L16.7,48.6 M84.8,76.3 L84.5,81.1 L82.7,85.2 L80.4,88.8 L78.4,92.9 L75.6,96.1 L71.9,97.7 L68.6,99.9 L66.1,103.8 L62.4,105.1 M57.5,105.7 L53.7,106.4 L49.9,106.5 L46.1,105.8 L42.4,104.7 L38.6,104.2 L34.9,102.7 L30.8,101.9 L28.6,97.4 L24.4,96.2 L22.8,91.4 L20.2,88.0 L17.2,84.7 L15.4,80.4 L14.9,75.5 L14.7,70.8 L13.2,66.3 L13.3,61.6 L12.3,56.8 L14.5,52.4 M17.8,42.6 L18.8,38.2 L20.2,33.9 L22.8,30.5 L26.6,28.8 L29.4,26.1 L32.5,23.7 L35.0,19.6 L39.0,19.7 L42.3,17.3 L46.0,16.2 L49.8,17.4 L53.5,17.8 L57.4,16.6 L60.9,18.7 L64.1,21.1 L67.9,21.9 L70.6,25.2 L73.5,28.0 L75.7,31.6 L79.4,33.6 L81.9,37.1 L83.3,41.5 L85.4,45.4 L84.7,50.4 M87.9,58.7 L87.9,64.8 L86.1,70.5 L84.6,76.0 M10.9,64.0 L9.4,59.0 L10.1,54.0 L10.8,49.0 L12.2,44.2 L14.2,39.8 L16.9,35.9 L19.3,31.9 L21.9,28.1 L24.3,23.9 L28.6,22.6 L31.9,19.8 L35.0,16.2 L39.3,16.0 L43.3,15.5 L47.3,15.0 L51.3,13.4 L55.4,14.5 L59.7,13.5 L63.7,15.3 L67.7,17.0 L70.5,21.2 L73.6,24.4 L76.7,27.5 L80.2,30.3 M86.8,45.2 L88.4,49.6 L89.7,54.3 L90.2,59.1 L90.5,64.1 L90.3,69.0 L89.1,73.8 L86.7,77.9 L86.8,83.2 L83.7,86.8 L82.0,91.2 L79.1,94.6 L76.9,98.8 L73.0,100.6 L69.7,103.3 L66.2,105.5 L62.5,107.0 M46.6,109.8 L42.6,109.3 L38.2,109.8 L34.7,106.8 L31.3,103.9 L27.1,102.8 L24.0,99.3 L20.4,96.6 L19.3,91.1 L16.2,87.7 L13.5,83.8 L11.8,79.2 L10.4,74.4 L11.6,69.0 L10.6,64.2 M66.0,110.5 L62.1,113.3 L57.4,112.8 L53.2,115.0 L48.8,113.8 L44.5,112.8 L40.0,113.4 L35.6,112.4 L32.3,108.0 L27.9,106.9 L24.2,104.0 L21.6,99.7 L18.3,96.3 L16.0,91.7 L13.6,87.5 L11.5,82.9 L9.1,78.4 L7.8,73.3 L8.2,67.8 L8.5,62.6 L7.8,57.4 L7.5,52.0 L9.8,47.2 L11.0,42.2 L13.1,37.6 L14.1,32.1 M24.1,22.2 L27.1,18.4 L30.7,15.4 L34.6,13.0 L39.1,13.0 L43.2,11.7 L47.4,9.5 L51.8,10.3 L56.0,11.2 L60.2,12.1 M77.0,21.4 L79.9,25.5 L83.0,29.4 L86.6,33.0 L89.2,37.6 L89.6,43.4 L90.6,48.7 L92.8,53.7 L92.0,59.3 L91.5,64.6 L93.3,70.3 L91.2,75.3 L90.7,80.9 L87.9,85.4 M76.7,101.3 L73.0,104.0 L70.0,108.1 L66.1,110.6" fill="none" stroke="#b5140d" stroke-width="1.5" stroke-linecap="round" filter="url(#ink)"/></svg></div>
     <div id="type" aria-live="polite" hidden></div>
     <div id="say" aria-live="polite" hidden></div>
     <div id="choice" role="group" aria-label="Escolha" hidden></div>
@@ -1385,6 +1406,152 @@ ART.blurLight = () => bg('#000') + `<g class="lightGrow"><ellipse cx="360" cy="5
 ART.corridorEnd = () => corridorBase({ seed: 2 }) + `<g class="pulse">` + inkD('M306,562 C292,558 278,560 258,562 M270,552 L256,562 L270,570', 4, RED) + inkD('M378,564 C394,560 410,560 430,556 M418,548 L431,556 L418,566', 4, RED) + `</g>` + vig(.75) + `<rect width="${W}" height="${H}" fill="#000" opacity="0" class="fadeFromBlack"/>`;
 
 /* ============================================================
+   OLHAR PARA TRÁS — Ciclo I (parede de bilhetes) e Ciclo II (o Recolhedor)
+   ============================================================ */
+'use strict';
+const NOTE_FONTS = ['Patrick Hand SC, cursive', 'Caveat, cursive', 'Shadows Into Light, cursive', 'Courier Prime, monospace', 'Rock Salt, cursive'];
+function fingerprintArt(cx, cy, s = 1, rot = 0, col = RED) {
+  let d = '';
+  for (let k = 1; k <= 13; k++) {
+    const rx = (2.2 + k * 2.9) * s, ry = (3 + k * 3.5) * s;
+    let a = rr(0, 6.28); const end = a + 6.28;
+    while (a < end) {
+      const e = Math.min(a + rr(.8, 2.6), end), n = Math.max(3, Math.round((e - a) * 10));
+      for (let i = 0; i <= n; i++) { const t = a + (e - a) * i / n; d += (i ? 'L' : 'M') + f1(Math.cos(t) * rx) + ',' + f1(Math.sin(t) * ry); }
+      a = e + rr(.12, .45);
+    }
+  }
+  return `<g transform="translate(${cx} ${cy}) rotate(${rot})"><ellipse rx="${44 * s}" ry="${52 * s}" fill="${col}" opacity=".08"/><path d="${d}" fill="none" stroke="${col}" stroke-width="1.3" stroke-linecap="round" opacity=".9"/></g>`;
+}
+// um bilhete "NÃO OLHE PARA TRÁS" com letra e papel variados (cada um de uma pessoa diferente)
+function lookNote(cx, cy, w, rot, i, o = {}) {
+  const font = NOTE_FONTS[i % NOTE_FONTS.length], tone = ['#c9c9c4', '#b9b6aa', '#d6d6d2', '#a9a69a', '#c2bfb2'][i % 5];
+  const fs = w * (font.startsWith('Rock') ? .12 : font.startsWith('Courier') ? .13 : .19);
+  const low = i % 3 === 1;
+  return paper(cx, cy, w, w * .78, rot, [low ? 'não olhe' : 'NÃO OLHE', low ? 'para trás' : 'PARA TRÁS'],
+    { fs, lh: fs * 1.25, font, fill: o.fill || tone, tcol: '#1d1d1d', shadowOp: .35, sw: 3, texture: false, after: o.after || '' });
+}
+function backRoom(o = {}) {
+  let s = bg('#070707') + rect(70, 60, 580, 1000, o.wall || '#262626');
+  s += ink([[70, 60], [70, 1060], [650, 1060], [650, 60]], 4, '#050505');
+  s += poly([[0, 1060], [720, 1060], [720, 1300], [0, 1300]], '#111');
+  // a luz da fresta, agora às costas: um leque no chão
+  s += `<path d="M180,1300 L300,1060 L420,1060 L560,1300 Z" fill="#cfcfcf" opacity=".28" filter="url(#blur18)" class="breath"/>`;
+  return s;
+}
+ART.backWallDark = () => {
+  seed(80);
+  let s = backRoom();
+  let notes = '';
+  for (let i = 0; i < 26; i++) notes += lookNote(rr(120, 600), rr(140, 980), rr(90, 140), rr(-14, 14), i);
+  s += `<g class="eyesAdjust">${notes}</g>`;
+  s += `<rect width="${W}" height="${H}" fill="url(#upDark)" opacity=".9"/>`;
+  return s + vig(1);
+};
+ART.backWallNotes = () => {
+  seed(81);
+  let s = backRoom({ wall: '#1d1d1d' });
+  let i = 0;
+  for (let y = 120; y < 1040; y += 118) for (let x = 110; x < 640; x += 128) {
+    s += lookNote(x + rr(-30, 30), y + rr(-25, 25), rr(120, 170), rr(-16, 16), i++);
+    if (rnd() < .3) s += `<circle cx="${f1(x + rr(-40, 40))}" cy="${f1(y - 50)}" r="4" fill="#0a0a0a"/>`;
+  }
+  for (let k = 0; k < 5; k++) s += lookNote(rr(160, 560), rr(1110, 1240), rr(110, 150), rr(-50, 50), i++);
+  s += `<rect width="${W}" height="${H}" fill="url(#upDark)" opacity=".75"/>`;
+  return s + vig(.9);
+};
+ART.backWallMark = () => {
+  seed(82);
+  let s = backRoom({ wall: '#1b1b1b' });
+  s += lookNote(110, 380, 300, -10, 2) + lookNote(640, 300, 280, 12, 4) + lookNote(150, 1000, 300, 8, 1) + lookNote(620, 1020, 300, -6, 3);
+  s += lookNote(360, 660, 470, -3, 0, { fill: '#d7d6d0', after: fingerprintArt(150, 112, 1.25, -24) });
+  s += `<rect width="${W}" height="${H}" fill="url(#vigSoft)"/>`;
+  return s + vig(.7);
+};
+ART.doorAjar = () => {
+  let s = ART.doorDark();
+  s += `<g class="doorGapOpen"><rect x="560" y="252" width="14" height="738" fill="#fff" filter="url(#glowW)"/>
+    <path d="M560,990 L574,990 L700,1280 L520,1280 Z" fill="#fff" opacity=".35" filter="url(#blur18)"/></g>`;
+  return s;
+};
+ART.noteRuleAlt = () => {
+  seed(11);
+  let s = bg('#f7f7f7');
+  s += paper(362, 760, 520, 600, 0, [
+    'VOCÊ OLHOU PARA TRÁS.', 'TUDO BEM.', '', 'DESTA VEZ ELE', 'NÃO ESTAVA LÁ.', '',
+    'REGRA NÚMERO 1:', 'SE VOCÊ OLHAR PARA', 'ELE VOCÊ MORRE.'], { fs: 40, lh: 52, pin: true, shadowOp: .22, dy: 6,
+    after: `<path d="M210,250 l8,-30 l6,26 l6,-28 l6,24 l6,-20 l6,18" stroke="${INK}" stroke-width="3" fill="none"/><path d="M-230,190 l-6,50 M-224,200 l-4,40" stroke="${INK}" stroke-width="3"/>` });
+  return s + vig(.12);
+};
+ART.backWallBare = () => {
+  seed(83);
+  let s = backRoom({ wall: '#272727' });
+  let marks = '';
+  for (let y = 120; y < 1040; y += 118) for (let x = 110; x < 640; x += 128) {
+    const cx = x + rr(-30, 30), cy = y + rr(-25, 25), w = rr(120, 170), r = rr(-16, 16), rot = `transform="rotate(${f1(r)} ${f1(cx)} ${f1(cy)})"`;
+    marks += `<rect x="${f1(cx - w / 2)}" y="${f1(cy - w * .39)}" width="${f1(w)}" height="${f1(w * .78)}" fill="#3a3a3a" opacity=".55" ${rot}/>`;
+    marks += `<circle cx="${f1(cx)}" cy="${f1(cy - w * .36)}" r="3.5" fill="#080808"/>`;
+    if (rnd() < .5) marks += `<polygon points="${f1(cx - w / 2)},${f1(cy - w * .39)} ${f1(cx - w / 2 + rr(14, 30))},${f1(cy - w * .39)} ${f1(cx - w / 2)},${f1(cy - w * .39 + rr(14, 30))}" fill="#a8a69c" ${rot}/>`;
+    if (rnd() < .35) marks += `<rect x="${f1(cx + w / 2 - 30)}" y="${f1(cy + w * .3)}" width="34" height="11" fill="#8f8d84" opacity=".8" ${rot}/>`;
+  }
+  s += `<g filter="url(#ink)">${marks}</g>`;
+  s += `<rect width="${W}" height="${H}" fill="url(#upDark)" opacity=".8"/>`;
+  return s + vig(.95);
+};
+// o corpo do Recolhedor: escamas de bilhetes sobre uma silhueta magra
+function collectorScales(box, n, seedN, scale = 1) {
+  seed(seedN);
+  const [x0, x1, y0, y1] = box; let s = '';
+  for (let i = 0; i < n; i++) {
+    const y = rr(y0, y1), t = (y - y0) / (y1 - y0);
+    const half = (x1 - x0) / 2 * (0.55 + 0.45 * Math.sin(Math.PI * Math.min(1, t * 1.2)));
+    s += lookNote((x0 + x1) / 2 + rr(-half, half), y, rr(60, 96) * scale, rr(-35, 35), i);
+  }
+  return s;
+}
+ART.collectorFeet = () => {
+  seed(84);
+  let s = bg('#050505') + `<path d="M120,1300 L300,980 L440,980 L620,1300 Z" fill="#cfcfcf" opacity=".22" filter="url(#blur18)"/>`;
+  const foot = (x, m) => `<path d="M${x - 26 * m},560 C${x - 30 * m},700 ${x - 22 * m},820 ${x - 18 * m},900 C${x - 40 * m},940 ${x - 70 * m},990 ${x - 64 * m},1010 L${x + 40 * m},1012 C${x + 34 * m},980 ${x + 20 * m},940 ${x + 16 * m},900 C${x + 20 * m},820 ${x + 26 * m},700 ${x + 26 * m},560 Z" fill="#7d7d7a" stroke="${INK}" stroke-width="4" filter="url(#ink)"/>
+    <path d="M${x - 58 * m},1008 l0,-12 M${x - 40 * m},1010 l0,-13 M${x - 22 * m},1011 l0,-13 M${x - 4 * m},1011 l0,-12 M${x + 14 * m},1011 l0,-11" stroke="${INK}" stroke-width="2.5"/>`;
+  s += foot(300, 1) + foot(440, -1);
+  s += `<g class="breathPaper">${collectorScales([180, 560, 300, 660], 46, 85, .95)}</g>`;
+  s += `<rect width="${W}" height="700" fill="url(#upDark)"/>`;
+  return s + vig(.95);
+};
+ART.collectorBody = () => {
+  seed(86);
+  let s = bg('#040404') + `<g class="tiltUpSlow">`;
+  s += `<path d="M250,-200 C220,200 230,700 280,1300 L440,1300 C490,700 500,200 470,-200 Z" fill="#3a3a38"/>`;
+  s += `<path d="M190,0 C150,300 150,700 170,980 M530,0 C570,300 570,700 550,980" stroke="#2c2c2a" stroke-width="54" fill="none" stroke-linecap="round"/>`;
+  s += `<g class="breathPaper">${collectorScales([200, 520, -180, 1300], 120, 87, 1.05)}</g>`;
+  s += `</g><rect width="${W}" height="${H}" fill="url(#upDark)" opacity=".85"/>`;
+  return s + `<ellipse cx="360" cy="1300" rx="420" ry="260" fill="#fff" opacity=".08" filter="url(#blur40)"/>` + vig(.9);
+};
+ART.collectorFace = () => {
+  seed(88);
+  let s = bg('#050505');
+  s += `<g class="breathPaper">${collectorScales([90, 630, 900, 1300], 40, 89, 1.25)}</g>`;
+  s += `<path d="M360,180 C500,180 560,320 560,520 C560,720 470,860 360,860 C250,860 160,720 160,520 C160,320 220,180 360,180 Z" fill="#3c3c3a" stroke="${INK}" stroke-width="5" filter="url(#ink)"/>`;
+  const tape = `<rect x="-200" y="-240" width="70" height="20" fill="#9a988e" opacity=".9" transform="rotate(-30 -165 -230)"/><rect x="120" y="-240" width="70" height="20" fill="#9a988e" opacity=".9" transform="rotate(25 155 -230)"/><rect x="130" y="200" width="70" height="20" fill="#9a988e" opacity=".9" transform="rotate(-20 165 210)"/><path d="M-60,40 q60,-30 120,0" stroke="#000" stroke-width="10" opacity=".08" fill="none"/>`;
+  s += `<g class="faceNoteBreath">` + paper(360, 540, 360, 440, -5, ['NÃO OLHE', 'PARA TRÁS'], { fs: 64, lh: 90, fill: '#d9d8d2', shadowOp: .5, after: tape }) + `</g>`;
+  s += `<ellipse cx="360" cy="560" rx="380" ry="460" fill="#000" opacity=".35" filter="url(#blur40)"/>`;
+  return s + vig(.85);
+};
+ART.collectorTouch = () => {
+  let s = `<g filter="url(#blur6)" opacity=".75">` + ART.collectorFace() + `</g>`;
+  seed(90);
+  // a mão dele sobe: dedos longos e finos, pontas vermelhas de tinta
+  const fingers = [[[300, 1180], [320, 900], [345, 700]], [[340, 1180], [352, 880], [360, 640]], [[380, 1180], [392, 900], [404, 720]], [[410, 1190], [440, 980], [452, 820]]];
+  s += `<g class="handRise">`;
+  s += body([{ d: 'M250,1300 C250,1220 270,1150 330,1140 C400,1130 450,1160 460,1220 L470,1300 Z' }, ...fingers.map(f => ({ l: f, w: 22 })), { l: [[270, 1210], [220, 1080], [215, 990]], w: 24 }], '#8d8d8a', 4);
+  s += `<g fill="${RED}" filter="url(#ink)">${fingers.map(f => `<ellipse cx="${f[2][0]}" cy="${f[2][1] + 8}" rx="10" ry="14"/>`).join('')}<ellipse cx="215" cy="998" rx="11" ry="14"/></g>`;
+  s += `<path d="M330,1000 q14,-4 26,0 M336,860 q12,-4 22,0 M380,960 q12,-4 22,0" stroke="${INK}" stroke-width="2.5" fill="none"/>`;
+  s += `</g>`;
+  return s + vig(.7);
+};
+
+/* ============================================================
    DESTINO — roteiro (ciclo I), na ordem dos quadros originais.
    Em cada escolha, a opção com caminho desenhado leva "go";
    as demais aparecem com a porcentagem da votação, travadas.
@@ -1406,7 +1573,28 @@ const STORY = {
     { art: 'black', t: 1200, auto: 1600 },
     { art: 'spark', t: 300 },
     { art: 'doorDark' },
-    { art: 'noteNaoOlhe', sfx: 'paper', choice: { q: '?', opts: [['Olhar para trás', 47], ['Abrir a porta', 53, 'abrir1']] } },
+    { art: 'noteNaoOlhe', sfx: 'paper', choice: { q: '?', opts: [['Olhar para trás', 47, { 1: 'olharTras1', 2: 'olharTras2' }], ['Abrir a porta', 53, 'abrir1']] } },
+  ] },
+
+  /* Olhar para trás, Ciclo I: a parede de bilhetes (desvio que volta à sala branca) */
+  olharTras1: { next: 'abrir1', nextAt: 3, beats: [
+    { art: 'backWallDark', t: 600, flag: 'olhouTras', auto: 4600 },
+    { art: 'backWallNotes', t: 1200, sfx: 'paper', auto: 4200 },
+    { art: 'backWallMark', t: 900, auto: 4200 },
+    { art: 'doorAjar', t: 800, sfx: 'creak', auto: 3000 },
+    { art: 'white', t: 900, auto: 1200, amb: 'room' },
+  ] },
+
+  /* Olhar para trás, Ciclo II em diante: o Recolhedor (morte) */
+  olharTras2: { beats: [
+    { art: 'backWallBare', t: 600, auto: 3800 },
+    { art: 'collectorFeet', t: 900, sfx: 'paper', auto: 3800 },
+    { art: 'collectorBody', t: 900, sfx: 'tension', auto: 5600 },
+    { art: 'collectorFace', t: 1000, auto: 4200 },
+    { art: 'collectorTouch', t: 300, print: 1600, auto: 3600 },
+    { art: 'black', t: 120, sfx: 'flap', amb: 'void', auto: 2200 },
+    { art: 'blurLight', t: 1200, auto: 2600 },
+    { art: 'corridorEnd', t: 1600, end: true, amb: 'room' },
   ] },
 
   abrir1: { beats: [
@@ -1414,7 +1602,7 @@ const STORY = {
     { art: 'pushPlate', sfx: 'creak' },
     { art: 'white', t: 250, auto: 900, amb: 'room' },
     { art: 'roomHoles', t: 1400 },
-    { art: 'noteRule', sfx: 'paper' },
+    { art: 'noteRule', alt: { flag: 'olhouTras', art: 'noteRuleAlt' }, sfx: 'paper' },
     { art: 'holeChave' },
     { art: 'holeQ' },
     { art: 'roomHoles', choice: { q: 'ESCOLHA', opts: [['?', 56, 'buraco'], ['Chave', 44]] } },
@@ -1623,7 +1811,8 @@ function beat() { return STORY[G.node].beats[G.i]; }
 
 function renderArt(b) {
   if (b.bat != null) CTX.bat = b.bat;
-  const key = b.art + JSON.stringify(b.args || {}) + CTX.bat;
+  const art = b.alt && G.flags[b.alt.flag] ? b.alt.art : b.art;
+  const key = art + JSON.stringify(b.args || {}) + CTX.bat;
   if (key === G.lastArt) return;
   G.lastArt = key;
   const svg = document.createElementNS(NS, 'svg');
@@ -1631,7 +1820,7 @@ function renderArt(b) {
   svg.setAttribute('preserveAspectRatio', 'xMidYMid slice');
   svg.setAttribute('class', 'layer');
   svg.setAttribute('aria-hidden', 'true');
-  svg.innerHTML = ART[b.art](b.args || {});
+  svg.innerHTML = ART[art](b.args || {});
   const dur = reduce ? 0 : (b.t ?? 1000);
   svg.style.transition = `opacity ${dur}ms ease`;
   svg.style.opacity = dur ? 0 : 1;
@@ -1673,7 +1862,7 @@ function showSay(spec) {
 /* despertar: só libera a história quando a visão clareia */
 const WAKE_MS = 5200;
 function wakeUp() {
-  G.waking = true;
+  G.waking = true; printMark(false);
   stageEl.classList.remove('waking', 'gulp'); void stageEl.offsetWidth; stageEl.classList.add('waking');
   clearTimeout(G.wakeT);
   G.wakeT = setTimeout(() => { stageEl.classList.remove('waking'); G.waking = false; }, WAKE_MS);
@@ -1684,7 +1873,9 @@ function play() {
   hintEl.classList.remove('on');
   const b = beat();
   if (b.amb) SND.ambience(b.amb);
+  if (b.flag) G.flags[b.flag] = true;
   if (b.wake) wakeUp();
+  if (b.print) setTimeout(() => printMark(true), b.print === true ? 0 : b.print);
   renderArt(b);
   if (b.sfx) setTimeout(() => SND.play(b.sfx), Math.min(250, b.t ?? 700));
   if (b.flash && !reduce) { flashEl.classList.remove('go'); void flashEl.offsetWidth; flashEl.classList.add('go'); }
@@ -1728,7 +1919,7 @@ function advance() {
 function goNode(name) { G.node = name; G.i = 0; play(); }
 
 function endCycle() {
-  G.cycle++;
+  G.cycle++; G.flags = {};
   cycleEl.querySelector('b').textContent = roman(G.cycle);
   const card = $('#cycleCard');
   card.querySelector('.n').textContent = 'Ciclo ' + roman(G.cycle);
@@ -1737,10 +1928,25 @@ function endCycle() {
 }
 
 /* ---------------- escolhas a lápis ---------------- */
+/* destino que muda com o ciclo: {1: 'a', 2: 'b'} → vale o maior ciclo que não passa do atual */
+function routeFor(go) {
+  if (!go || typeof go === 'string') return go || null;
+  let best = null;
+  Object.keys(go).map(Number).sort((a, b) => a - b).forEach(k => { if (k <= G.cycle) best = go[k]; });
+  return best;
+}
+/* marcas que valem só dentro do ciclo atual (ex.: olhou para trás) */
+G.flags = {};
+/* impressão digital vermelha sobre a tela: fica até o próximo despertar */
+function printMark(on) {
+  const el = document.getElementById('print'); if (!el) return;
+  el.hidden = !on; el.classList.remove('on');
+  if (on) { void el.offsetWidth; el.classList.add('on'); }
+}
 const BOX = '<svg viewBox="0 0 40 40" class="box" aria-hidden="true"><path d="M5,7 C14,5 27,6 35,5 C36,15 35,26 36,35 C26,36 15,35 5,36 C4,26 6,16 5,7" /><path class="tick" d="M10,20 L18,29 L33,6" /></svg>';
 function showChoice(c) {
   const opts = c.opts.map((o, k) => {
-    const [label, pct, go] = o, open = !!go;
+    const [label, pct, go] = o, open = !!routeFor(go);
     return `<li><button type="button" id="opt-${G.node}-${k}" class="opt ${open ? 'open' : 'locked'}" data-k="${k}" ${open ? '' : 'aria-disabled="true"'}
       aria-label="${label.replace(/<[^>]+>/g, ' ')}${open ? '' : ' — caminho ainda não desenhado'}">
       ${BOX}<span class="lbl">${label}</span>
@@ -1756,8 +1962,8 @@ function showChoice(c) {
 function hideChoice() { choiceEl.hidden = true; choiceEl.innerHTML = ''; choiceEl.classList.remove('in', 'out'); }
 function pick(c, k, btn) {
   if (G.waking || !G.ready || !btn || performance.now() - (G.choiceAt || 0) < 700) return;
-  const o = c.opts[k];
-  if (!o[2]) {
+  const o = c.opts[k], dest = routeFor(o[2]);
+  if (!dest) {
     btn.classList.remove('nope'); void btn.offsetWidth; btn.classList.add('nope');
     const f = choiceEl.querySelector('.foot'); f.textContent = 'esse caminho ainda não foi desenhado'; f.classList.add('warn');
     SND.play('paper'); return;
@@ -1765,7 +1971,7 @@ function pick(c, k, btn) {
   G.ready = false;
   btn.classList.add('picked'); SND.play('paper');
   setTimeout(() => { choiceEl.classList.add('out'); }, 650);
-  setTimeout(() => goNode(o[2]), 1100);
+  setTimeout(() => goNode(dest), 1100);
 }
 
 /* ---------------- entrada ---------------- */
@@ -1778,7 +1984,7 @@ document.addEventListener('keydown', e => {
   if (n && b.choice && !choiceEl.hidden && b.choice.opts[n - 1]) { const btn = choiceEl.querySelector(`[data-k="${n - 1}"]`); pick(b.choice, n - 1, btn); }
 });
 $('#snd').addEventListener('click', e => { e.stopPropagation(); SND.init(); const on = SND.toggle(); e.currentTarget.setAttribute('aria-pressed', on); e.currentTarget.querySelector('span').textContent = on ? 'som' : 'mudo'; });
-$('#restart').addEventListener('click', e => { e.stopPropagation(); if (!G.started) return; clearTimeout(G.timer); if (G.typing) G.typing.finish(); CTX.bat = 21; G.lastArt = null; goNode('inicio'); });
+$('#restart').addEventListener('click', e => { e.stopPropagation(); if (!G.started) return; clearTimeout(G.timer); if (G.typing) G.typing.finish(); CTX.bat = 21; G.lastArt = null; G.flags = {}; printMark(false); goNode('inicio'); });
 
 function start() {
   if (G.started) return;
@@ -1800,6 +2006,7 @@ function boot(d = {}) {
   }
 }
 const _q = new URLSearchParams(location.search);
+if (_q.get('c')) { G.cycle = +_q.get('c'); cycleEl.querySelector('b').textContent = roman(G.cycle); }
 if (_q.get('n') && STORY[_q.get('n')]) boot({ started: true, node: _q.get('n'), i: +(_q.get('i') || 0), bat: +(_q.get('bat') || 21) });
 else window.claude?.hot?.ready ? window.claude.hot.ready(boot) : boot(window.claude?.hot?.data ?? {});
 
