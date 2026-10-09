@@ -1004,14 +1004,14 @@ ART.roomDoorKnock = (b = {}) => {
 };
 
 /* ---------- abrindo a porta ---------- */
-ART.doorHandTorch = () => {
+ART.doorHandTorch = (b = {}) => {
   seed(23);
   let s = bg('#fbfbfb');
   s += `<g class="doorSwing">` + rect(-20, -20, 660, 1320, '#9a9a9a') + hatch(0, 0, 640, 1280, 40, '#000', .08) + ink([[640, -10], [640, 1290]], 4);
   s += `<g filter="url(#ink)"><rect x="530" y="860" width="96" height="190" rx="6" fill="#efefef" stroke="${INK}" stroke-width="5"/><circle cx="578" cy="880" r="5" fill="${INK}"/><circle cx="578" cy="1030" r="5" fill="${INK}"/><path d="M578,990 m-8,0 a8,8 0 1 1 16,0 l-3,3 l3,22 l-16,0 l3,-22 Z" fill="${INK}"/></g>`;
   s += `<circle cx="570" cy="930" r="40" fill="#cfcfcf" stroke="${INK}" stroke-width="5" filter="url(#ink)"/>`;
   s += `</g>` + `<rect x="640" y="0" width="80" height="${H}" fill="#000" class="gapOpen" opacity="0"/>`;
-  s += torch({ x: 760, y: 1000, rot: -10 });
+  if (!b.noTorch) s += torch({ x: 760, y: 1000, rot: -10 });
   s += '';
   return s;
 };
@@ -1630,6 +1630,16 @@ ART.twoDoors = () => {
   return s + vig(.45);
 };
 
+// o bilhete do ser alto para quem abre a porta sem luz: aviso e ameaça
+ART.noteSemLuz = () => {
+  seed(95);
+  let s = bg('#060606');
+  s += `<g opacity=".3">` + leg(220, -600, 1500, 170, 1, { toes: false }) + leg(500, -600, 1500, 160, -1, { toes: false }) + `</g>` + vig(1);
+  s += paper(370, 700, 500, 560, -7, ['SEM LUZ, AQUI FORA', 'VOCÊ NÃO DURA', 'NEM ATÉ A PRIMEIRA ÁRVORE.', '', 'FIQUE AÍ DENTRO...', 'POR ENQUANTO.'],
+    { fs: 36, lh: 66, fill: '#e9e9e9', shadowOp: .45 });
+  return s;
+};
+
 /* ============================================================
    DESTINO — roteiro (ciclo I), na ordem dos quadros originais.
    Em cada escolha, a opção com caminho desenhado leva "go";
@@ -1687,7 +1697,16 @@ const STORY = {
     { art: 'keyInHole', t: 700, sfx: 'knob', auto: 2600 },
     { art: 'keyInHole', type: { t: 'Você possui uma chave.', col: '#111', y: 10 } },
     { art: 'roomDoor', args: { noTorch: 1 }, t: 1000, sfx: 'steps', auto: 2400 },
-    { art: 'roomDoorKnock', args: { noTorch: 1 }, t: 0, sfx: 'knock', choice: { q: '?', opts: [['Abrir a porta', 78], ['Permanecer no cômodo', 22, 'permanecer']] } },
+    { art: 'roomDoorKnock', args: { noTorch: 1 }, t: 0, sfx: 'knock', choice: { q: '?', opts: [['Abrir a porta', 78, 'abrirChave'], ['Permanecer no cômodo', 22, 'permanecer']] } },
+  ] },
+
+  /* abrir a porta sem lanterna: o ser alto avisa (e ameaça) e a porta se fecha */
+  abrirChave: { next: 'permanecer', nextAt: 0, beats: [
+    { art: 'doorHandTorch', args: { noTorch: 1 }, sfx: 'creak', auto: 2600 },
+    { art: 'legsDoor', sfx: 'wind', amb: 'forest', auto: 3200 },
+    { art: 'paperFall', sfx: 'flap', auto: 3000 },
+    { art: 'noteSemLuz', hold: true, sfx: 'paper' },
+    { art: 'roomDoor', args: { noTorch: 1 }, t: 120, sfx: 'slam', shake: true, amb: 'room', auto: 2200 },
   ] },
 
   /* permanecer no cômodo: volta pela porta lateral até o corredor vermelho, onde agora há duas portas */
@@ -1703,7 +1722,7 @@ const STORY = {
     { art: 'pushPlate', sfx: 'creak' },
     { art: 'white', t: 250, auto: 900, amb: 'room' },
     { art: 'roomHoles', t: 1400 },
-    { art: 'noteRule', alt: { flag: 'olhouTras', art: 'noteRuleAlt' }, sfx: 'paper' },
+    { art: 'noteRule', hold: true, alt: { flag: 'olhouTras', art: 'noteRuleAlt' }, sfx: 'paper' },
     { art: 'holeChave' },
     { art: 'holeQ' },
     { art: 'roomHoles', choice: { q: 'ESCOLHA', opts: [['?', 56, 'buraco'], ['Chave', 44, 'chave']] } },
@@ -1714,7 +1733,7 @@ const STORY = {
     { art: 'armIn', sfx: 'whoosh' },
     { art: 'holeClose' },
     { art: 'black', t: 200, auto: 1300 },
-    { art: 'noteFromHole', sfx: 'paper' },
+    { art: 'noteFromHole', hold: true, sfx: 'paper' },
     { art: 'creepyHand', sfx: 'sting' },
     { art: 'gotTorch', bat: 21, type: { t: 'Parabéns, você possui uma lanterna', col: '#111', y: 12 } },
     { art: 'holesClosed', type: { t: 'Os buracos se fecharam.', col: '#111', y: 13 } },
@@ -1728,10 +1747,10 @@ const STORY = {
     { art: 'legsDoor', sfx: 'wind', amb: 'forest' },
     { art: 'legsUp' },
     { art: 'paperFall', sfx: 'flap' },
-    { art: 'noteObrigado', sfx: 'paper' },
+    { art: 'noteObrigado', hold: true, sfx: 'paper' },
     { art: 'paperFlap', sfx: 'flap' },
     { art: 'feetPaper' },
-    { art: 'noteNaoFique', sfx: 'paper' },
+    { art: 'noteNaoFique', hold: true, sfx: 'paper' },
     { art: 'forestNote', choice: { q: '?', opts: [['Ficar no quarto', 14], ['Seguir em frente', 86, 'frente']] } },
   ] },
 
@@ -1799,12 +1818,12 @@ const STORY = {
   ajuda: { beats: [
     { art: 'legsClose', bat: 14 },
     { art: 'paperFall2', sfx: 'flap' },
-    { art: 'noteFugiu', sfx: 'paper' },
-    { art: 'catchPaper', sfx: 'paper' },
-    { art: 'noteOlhe', sfx: 'paper' },
+    { art: 'noteFugiu', hold: true, sfx: 'paper' },
+    { art: 'catchPaper', hold: true, sfx: 'paper' },
+    { art: 'noteOlhe', hold: true, sfx: 'paper' },
     { art: 'legsUp2', bat: 13 },
     { art: 'face', t: 200, sfx: 'tension' },
-    { art: 'faceNote', amb: 'none' },
+    { art: 'faceNote', hold: true, amb: 'none' },
     { art: 'faceLunge', t: 0, sfx: 'jump', flash: true, shake: true, auto: 700 },
     { art: 'redFlesh', t: 120, sfx: 'gulp', auto: 1800 },
     { art: 'black', t: 900, auto: 2200, amb: 'void' },
@@ -1878,6 +1897,7 @@ const SND = {
       case 'tension': this.tone(48, 3.5, .25, 'sine'); this.tone(51, 3.5, .18, 'sine'); break;
       case 'scream': [196, 207, 293, 311].forEach((f, k) => this.tone(f, 1.6, .09, 'sawtooth', 0, f * .7)); this.noise(W_, 1.4, 1500, 1, .35, 'bandpass', 0, 600); break;
       case 'locked': [0, .13, .26].forEach(t => { this.noise(W_, .06, 3200, 3, .35, 'bandpass', t); this.tone(170, .08, .22, 'square', t, 110); }); this.noise(B, .16, 280, 1, .55, 'lowpass', .38); break;
+      case 'slam': this.noise(B, .35, 160, 1, .9, 'lowpass'); this.tone(70, .4, .7, 'sine', 0, 40); this.noise(W_, .08, 1800, 2, .25, 'bandpass'); break;
       case 'jump': this.noise(W_, .55, 2600, .5, .95, 'bandpass', 0, 500); [311, 330, 466, 622, 659].forEach(f => this.tone(f, .9, .15, 'sawtooth', 0, f * .55)); this.tone(62, .9, .95, 'sine', 0, 28); this.noise(B, .7, 200, 1, .95, 'lowpass'); break;
       case 'gulp': this.tone(120, 1.4, .5, 'sine', 0, 30); this.noise(B, 1.4, 300, 1, .5, 'lowpass', 0, 60); break;
     }
@@ -1994,6 +2014,7 @@ function play() {
       if (beat() !== b) return;
       G.ready = true;
       if (b.choice) showChoice(b.choice);
+      else if (b.hold) hintEl.classList.add('on'); // bilhetes e avisos em papel: só seguem com um toque
       else if (!b.end) G.timer = setTimeout(advance, Math.max(300, autoTime(b) - settle));
     }, b.choice ? Math.max(settle + 500, b.wake ? WAKE_MS + 200 : 0) : settle);
   });

@@ -1055,14 +1055,14 @@ ART.roomDoorKnock = (b = {}) => {
 };
 
 /* ---------- abrindo a porta ---------- */
-ART.doorHandTorch = () => {
+ART.doorHandTorch = (b = {}) => {
   seed(23);
   let s = bg('#fbfbfb');
   s += `<g class="doorSwing">` + rect(-20, -20, 660, 1320, '#9a9a9a') + hatch(0, 0, 640, 1280, 40, '#000', .08) + ink([[640, -10], [640, 1290]], 4);
   s += `<g filter="url(#ink)"><rect x="530" y="860" width="96" height="190" rx="6" fill="#efefef" stroke="${INK}" stroke-width="5"/><circle cx="578" cy="880" r="5" fill="${INK}"/><circle cx="578" cy="1030" r="5" fill="${INK}"/><path d="M578,990 m-8,0 a8,8 0 1 1 16,0 l-3,3 l3,22 l-16,0 l3,-22 Z" fill="${INK}"/></g>`;
   s += `<circle cx="570" cy="930" r="40" fill="#cfcfcf" stroke="${INK}" stroke-width="5" filter="url(#ink)"/>`;
   s += `</g>` + `<rect x="640" y="0" width="80" height="${H}" fill="#000" class="gapOpen" opacity="0"/>`;
-  s += torch({ x: 760, y: 1000, rot: -10 });
+  if (!b.noTorch) s += torch({ x: 760, y: 1000, rot: -10 });
   s += '';
   return s;
 };
@@ -1679,6 +1679,16 @@ ART.twoDoors = () => {
   s += `<g filter="url(#ink)"><rect x="586" y="740" width="30" height="80" rx="4" fill="#3a3a3a" stroke="${INK}" stroke-width="3"/></g>`;
   s += `<path d="M601,782 m-8,0 a8,8 0 1 1 16,0 l-3,3 l3,24 l-16,0 l3,-24 Z" fill="#fff" filter="url(#glowW)" class="flick"/>`;
   return s + vig(.45);
+};
+
+// o bilhete do ser alto para quem abre a porta sem luz: aviso e ameaça
+ART.noteSemLuz = () => {
+  seed(95);
+  let s = bg('#060606');
+  s += `<g opacity=".3">` + leg(220, -600, 1500, 170, 1, { toes: false }) + leg(500, -600, 1500, 160, -1, { toes: false }) + `</g>` + vig(1);
+  s += paper(370, 700, 500, 560, -7, ['SEM LUZ, AQUI FORA', 'VOCÊ NÃO DURA', 'NEM ATÉ A PRIMEIRA ÁRVORE.', '', 'FIQUE AÍ DENTRO...', 'POR ENQUANTO.'],
+    { fs: 36, lh: 66, fill: '#e9e9e9', shadowOp: .45 });
+  return s;
 };
 
 /* ============================================================
@@ -2478,6 +2488,7 @@ const NOTES = {
   naoFique: { lines: ['NÃO FIQUE AÍ', 'DENTRO, É MAIS', 'SEGURO AQUI FORA...', 'DESDE QUE SIGA', 'A TRILHA.'], o: { fs: 47, lh: 72, fill: '#e9e9e9' }, w: 460, h: 500, rot: 2, skin: '#e2e2e2' },
   fugiu: { lines: ['OH,', 'VOCÊ', 'FUGIU...'], o: { fs: 58, lh: 68, fill: '#e6e6e6' }, w: 300, h: 330, rot: 8, skin: '#dcdcdc' },
   verso: { lines: [], o: { fill: '#e6e6e6', after: '<path d="M-60,-40 l120,60 l-90,40 l100,40" stroke="#aaa" stroke-width="4" fill="none" opacity=".5"/>' }, w: 300, h: 330, rot: -3, skin: '#dcdcdc' },
+  semLuz: { lines: ['SEM LUZ, AQUI FORA', 'VOCÊ NÃO DURA', 'NEM ATÉ A PRIMEIRA ÁRVORE.', '', 'FIQUE AÍ DENTRO...', 'POR ENQUANTO.'], o: { fs: 38, lh: 64, fill: '#e9e9e9' }, w: 440, h: 520, rot: -7 },
   olhe: { lines: ['OLHE', 'PARA', 'MIM'], o: { fs: 92, lh: 116, fill: '#e6e6e6', font: 'Rock Salt, Patrick Hand SC, cursive' }, w: 380, h: 450, rot: -6, skin: '#dcdcdc' },
 };
 
@@ -2504,7 +2515,7 @@ const STORY = {
     { env: 'black', sfx: 'steps', cam: { p: [12.5, 1.6, -8.8], l: [20, 1.3, -8.8], d: 4.5, walk: 1 }, veil: { c: '#000', o: 1, d: 3800 }, auto: 4400 },
     { env: 'dark', cam: { p: [60, 1.6, 2.0], l: [60, .5, -2], cut: 1 }, veil: { o: 0, d: 3200 }, auto: 3000 },
     { sfx: 'steps', cam: { p: [60, 1.6, .25], l: [60.25, .2, -.9], d: 4.4, walk: 1 }, auto: 4400 },
-    { note: 'naoOlhe', sfx: 'paper' },
+    { note: 'naoOlhe', sfx: 'paper', hold: true },
     { note: null, cam: { p: [60, 1.6, -.2], l: [60, 1.05, -2], d: 1.8 },
       choice: { q: '?', opts: [['Olhar para trás', 47, { 1: 'olharTras1', 2: 'olharTras2' }], ['Abrir a porta', 53, 'abrir1']] } },
   ] },
@@ -2538,7 +2549,17 @@ const STORY = {
     { fx: 'takeKey', type: { t: 'Você possui uma chave.', col: '#111', y: 10 } },
     { cam: [{ p: [120, 1.6, -.1], l: [123, 1.5, -.1], d: 1.5 }, { p: [120, 1.6, .2], l: [120, 1.25, 3], d: 1.5 }], auto: 3200 },
     { fx: 'knock', sfx: 'knock', say: say('Toc<br>&nbsp;&nbsp;Toc', 60, 46, { ink: 1 }),
-      choice: { q: '?', opts: [['Abrir a porta', 78], ['Permanecer no cômodo', 22, 'permanecer']] } },
+      choice: { q: '?', opts: [['Abrir a porta', 78, 'abrirChave'], ['Permanecer no cômodo', 22, 'permanecer']] } },
+  ] },
+
+  /* abrir a porta sem lanterna: o ser alto avisa (e ameaça) e a porta se fecha */
+  abrirChave: { next: 'permanecer', nextAt: 0, beats: [
+    { sfx: 'knob', cam: { p: [120, 1.58, 2.25], l: [120.35, 1.0, 3], d: 2.2, walk: 1 }, auto: 2300 },
+    { fx: 'roomDoorOpen', sfx: 'creak', env: 'forestDoor', amb: 'forest', cam: { p: [120, 1.6, 2.0], l: [120, 2.2, 5.3], d: 3 }, auto: 3400 },
+    { sfx: 'wind', cam: { p: [120, 1.5, 2.85], l: [120, 7.5, 5.25], d: 4.5, e: 'sine' }, env: 'forestDoorDim', auto: 4600 },
+    { fx: 'paperDrop1', sfx: 'flap', cam: { l: [120, 1.3, 3.6], d: 2.6 }, auto: 2900 },
+    { note: 'semLuz', sfx: 'paper', hold: true },
+    { note: null, fx: 'roomDoorClose', sfx: 'slam', env: 'white', amb: 'room', cam: { p: [120, 1.6, 1.6], l: [120, 1.2, 3], d: 1.4 }, auto: 2200 },
   ] },
 
   /* permanecer no cômodo: volta pela porta lateral até o corredor vermelho, onde agora há duas portas */
@@ -2555,7 +2576,7 @@ const STORY = {
     { fx: 'darkDoorOpen', sfx: 'creak', cam: { p: [60, 1.6, -1.6], l: [60, 1.45, -3], d: 2.6 }, veil: { c: '#fff', o: 1, d: 1800, delay: 900 }, auto: 2900 },
     { reach: null, env: 'white', amb: 'room', cam: { p: [120, 1.6, 2.5], l: [120, 1.5, -3], cut: 1 }, veil: { o: 0, d: 2600 }, auto: 1800 },
     { cam: { p: [120, 1.62, 1.2], l: [120, 1.55, -3], d: 3, walk: 1 }, auto: 3000 },
-    { sfx: 'paper', cam: { p: [120, 1.86, -2.56], l: [120, 1.85, -3], d: 3.2 } },
+    { sfx: 'paper', hold: true, cam: { p: [120, 1.86, -2.56], l: [120, 1.85, -3], d: 3.2 } },
     { cam: { p: [120.66, 1.62, -2.25], l: [120.74, 1.66, -3], d: 2.4 } },
     { cam: { p: [119.34, 1.62, -2.25], l: [119.28, 1.62, -3], d: 2.2 } },
     { cam: { p: [120, 1.6, -1.1], l: [120, 1.62, -3], d: 2.2 },
@@ -2565,7 +2586,7 @@ const STORY = {
   buraco: { beats: [
     { cam: { p: [119.31, 1.56, -2.5], l: [119.3, 1.5, -3], d: 2.6 }, reach: { k: 'hole', delay: 1200 }, auto: 3900 },
     { sfx: 'whoosh', cam: { p: [119.3, 1.5, -2.87], l: [119.3, 1.5, -3.3], d: 1.6 }, veil: { c: '#000', o: 1, d: 1300 }, auto: 2600 },
-    { reach: null, veil: { o: 0, d: 1200 }, cam: { p: [119.45, 1.6, -1.9], l: [119.3, 1.45, -3], d: 1.2 }, note: 'desconhecido', sfx: 'paper' },
+    { reach: null, veil: { o: 0, d: 1200 }, cam: { p: [119.45, 1.6, -1.9], l: [119.3, 1.45, -3], d: 1.2 }, note: 'desconhecido', sfx: 'paper', hold: true },
     { note: null, fx: 'creepyArm', sfx: 'sting', cam: { p: [119.7, 1.62, -1.5], l: [119.3, 1.35, -3], d: 1.6 }, auto: 4400 },
     { fx: 'takeTorch', bat: 21, type: { t: 'Parabéns, você possui uma lanterna', col: '#111', y: 11 } },
     { fx: 'closeHoles', cam: { p: [120, 1.6, -.5], l: [120, 1.62, -3], d: 2.6 }, type: { t: 'Os buracos se fecharam.', col: '#111', y: 12 } },
@@ -2579,9 +2600,9 @@ const STORY = {
     { reach: null, fx: 'roomDoorOpen', sfx: 'creak', env: 'forestDoor', cam: { p: [120, 1.6, 2.0], l: [120, 2.2, 5.3], d: 3 }, auto: 3400 },
     { amb: 'forest', sfx: 'wind', cam: { p: [120, 1.5, 2.45], l: [120, 9.6, 5.25], d: 6.5, e: 'sine' }, env: 'forestDoorDim', auto: 6800 },
     { fx: 'paperDrop1', sfx: 'flap', cam: { l: [120, 1.3, 3.6], d: 2.6, e: 'io' }, auto: 2900 },
-    { note: 'obrigado', sfx: 'paper' },
+    { note: 'obrigado', sfx: 'paper', hold: true },
     { note: null, fx: 'paperDrop2', sfx: 'flap', cam: { p: [120, 1.4, 2.6], l: [120, .1, 5.0], d: 1.6 }, say: say('FLAP', 56, 44, { chalk: 1 }), auto: 2400 },
-    { note: 'naoFique', sfx: 'paper' },
+    { note: 'naoFique', sfx: 'paper', hold: true },
     { note: null, env: 'forest', light: 'on', cam: [{ p: [120.5, 1.6, 3.7], l: [121.3, 1.5, 8], d: 2, walk: 1 }, { p: [120.75, 1.6, 6.4], l: [PATH_X(15), 1.4, 15], d: 2.6, walk: 1 }], choiceAt: 4700,
       choice: { q: '?', opts: [['Ficar no quarto', 14], ['Seguir em frente', 86, 'frente']] } },
   ] },
@@ -2650,12 +2671,12 @@ const STORY = {
   ajuda: { beats: [
     { bat: 14, sfx: 'steps', cam: { p: [LEGS2.x - .5, 1.6, LEGS2.z + 1.7], l: [LEGS2.x, 1.7, LEGS2.z], d: 3, walk: 1 }, auto: 3000 },
     { fx: 'paperDrop3', sfx: 'flap', cam: { l: [LEGS2.x - .3, 1.5, LEGS2.z + 1], d: 2.4 }, auto: 2700 },
-    { note: 'fugiu', sfx: 'paper' },
-    { note: 'verso', sfx: 'paper' },
-    { note: 'olhe', sfx: 'paper' },
+    { note: 'fugiu', sfx: 'paper', hold: true },
+    { note: 'verso', sfx: 'paper', hold: true },
+    { note: 'olhe', sfx: 'paper', hold: true },
     { note: null, bat: 13, cam: { l: [LEGS2.x, 10.4, LEGS2.z], d: 5.5, e: 'sine' }, auto: 5600 },
     { fx: 'faceDown', sfx: 'tension', cam: { l: [LEGS2.x, 5.2, LEGS2.z], d: 4.5 } },
-    { fx: 'faceNote', amb: 'none' },
+    { fx: 'faceNote', amb: 'none', hold: true },
     { fx: 'lunge', sfx: 'jump', auto: 1000 },
     { sfx: 'gulp', veil: { c: '#000', o: 1, d: 1700 }, fx: 'swallow', auto: 2300 },
     { amb: 'void', fx: 'lightBlob', auto: 3000 },
@@ -2726,6 +2747,7 @@ const SND = {
       case 'tension': this.tone(48, 3.5, .25, 'sine'); this.tone(51, 3.5, .18, 'sine'); break;
       case 'scream': [196, 207, 293, 311].forEach((f, k) => this.tone(f, 1.6, .09, 'sawtooth', 0, f * .7)); this.noise(W_, 1.4, 1500, 1, .35, 'bandpass', 0, 600); break;
       case 'locked': [0, .13, .26].forEach(t => { this.noise(W_, .06, 3200, 3, .35, 'bandpass', t); this.tone(170, .08, .22, 'square', t, 110); }); this.noise(B, .16, 280, 1, .55, 'lowpass', .38); break;
+      case 'slam': this.noise(B, .35, 160, 1, .9, 'lowpass'); this.tone(70, .4, .7, 'sine', 0, 40); this.noise(W_, .08, 1800, 2, .25, 'bandpass'); break;
       case 'jump': this.noise(W_, .55, 2600, .5, .95, 'bandpass', 0, 500); [311, 330, 466, 622, 659].forEach(f => this.tone(f, .9, .15, 'sawtooth', 0, f * .55)); this.tone(62, .9, .95, 'sine', 0, 28); this.noise(B, .7, 200, 1, .95, 'lowpass'); break;
       case 'gulp': this.tone(120, 1.4, .5, 'sine', 0, 30); this.noise(B, 1.4, 300, 1, .5, 'lowpass', 0, 60); break;
     }
@@ -2890,6 +2912,7 @@ const FX = {
     } });
   },
   knock() { const d = OBJ.roomDoor; [0, .32].forEach(t => tween({ delay: t, dur: .2, ease: 'lin', on: k => { d.position.z = 3.03 - Math.sin(k * Math.PI) * .012; } })); },
+  roomDoorClose() { const d = OBJ.roomDoor, r0 = d.rotation.y; tween({ dur: .45, ease: 'in', on: k => { d.rotation.y = r0 * (1 - k); }, done: () => { G.shake = .05; setTimeout(() => { G.shake = 0; }, 250); } }); },
   roomDoorOpen() { const d = OBJ.roomDoor; tween({ delay: .2, dur: 2.8, ease: 'io', on: k => { d.rotation.y = -k * 1.75; } }); },
   paperDrop1() { dropPaper(v3(120.1, 9.2, 5.1), v3(120, 1.45, 3.0), false); },
   paperDrop2() { dropPaper(v3(120.3, 6, 4.9), v3(120.05, .02, 4.9), true); },
@@ -3028,6 +3051,7 @@ function play() {
       if (beat() !== b) return;
       G.ready = true;
       if (b.choice) showChoice(b.choice);
+      else if (b.hold) hintEl.classList.add('on'); // bilhetes e avisos em papel: só seguem com um toque
       else if (!b.end) G.timer = setTimeout(advance, Math.max(300, autoTime(b) - wait));
     }, wait);
   });
