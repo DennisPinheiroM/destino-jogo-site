@@ -212,6 +212,20 @@ svg.layer [class] { transform-box: view-box; transform-origin: 360px 640px; }
 @keyframes kenburns { from { transform: scale(1.0); } to { transform: scale(1.07) translateY(-1%); } }
 @media (prefers-reduced-motion: reduce) { #layers svg.layer { animation: none; } }
 
+/* ---------- despertar: visão borrada, pálpebras piscando até abrir ---------- */
+#lids { position: absolute; inset: 0; pointer-events: none; z-index: 3; display: none; }
+#stage.waking #lids { display: block; }
+#lids i { position: absolute; left: -15%; right: -15%; height: 56%; background: #000; filter: blur(14px); }
+#lids i:first-child { top: -4%; border-radius: 0 0 50% 50% / 0 0 34% 34%; animation: lidTop 5.2s ease-in-out both; }
+#lids i:last-child { bottom: -4%; border-radius: 50% 50% 0 0 / 34% 34% 0 0; animation: lidBot 5.2s ease-in-out both; }
+@keyframes lidTop { 0% { transform: translateY(0); } 16% { transform: translateY(-48%); } 26% { transform: translateY(-4%); } 44% { transform: translateY(-72%); } 54% { transform: translateY(-36%); } 100% { transform: translateY(-110%); } }
+@keyframes lidBot { 0% { transform: translateY(0); } 16% { transform: translateY(48%); } 26% { transform: translateY(4%); } 44% { transform: translateY(72%); } 54% { transform: translateY(36%); } 100% { transform: translateY(110%); } }
+#stage.waking #layers, #stage.waking #gl { animation: wakeBlur 5.2s ease-out both; }
+@keyframes wakeBlur { 0% { filter: blur(18px) brightness(.35); } 30% { filter: blur(11px) brightness(.75); } 46% { filter: blur(13px) brightness(.55); } 72% { filter: blur(4px) brightness(.95); } 100% { filter: blur(0) brightness(1); } }
+/* com movimento reduzido: sem pálpebras, só a visão clareando */
+@media (prefers-reduced-motion: reduce) { #lids { display: none !important; } #stage.waking #layers, #stage.waking #gl { animation-name: wakeBlurCalm; } }
+@keyframes wakeBlurCalm { from { filter: blur(18px) brightness(.35); } to { filter: blur(0) brightness(1); } }
+
 /* ---------- camadas da versão 3D ---------- */
 #gl, #gl canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #hud3d, #reach, #note, .held, .reachLayer { position: absolute; inset: 0; pointer-events: none; }
@@ -337,6 +351,7 @@ svg.layer [class] { transform-box: view-box; transform-origin: 360px 640px; }
     <div class="grain" aria-hidden="true"></div>
     <div id="veil" aria-hidden="true"></div>
     <div id="blob" aria-hidden="true"></div>
+    <div id="lids" aria-hidden="true"><i></i><i></i></div>
     <div id="type" aria-live="polite" hidden></div>
     <div id="say" aria-live="polite" hidden></div>
     <div id="choice" role="group" aria-label="Escolha" hidden></div>
@@ -2116,7 +2131,7 @@ const NOTES = {
 const STORY = {
   inicio: { beats: [
     { env: 'corridor', amb: 'room', cam: { p: [0, 1.6, 1.3], l: [0, 1.5, -10], cut: 1 }, veil: { c: '#a80000', o: 1, d: 0 }, type: { t: 'O destino está em suas mãos', col: '#130000', y: 41 } },
-    { veil: { o: 0, d: 2200 }, cam: { p: [0, 1.6, -2.4], l: [0, 1.45, -10], d: 8, walk: 1, e: 'sine' }, choiceAt: 4200,
+    { wake: true, veil: { o: 0, d: 2200 }, cam: { p: [0, 1.6, -2.4], l: [0, 1.45, -10], d: 8, walk: 1, e: 'sine' }, choiceAt: 4200,
       choice: { q: '?', opts: [['Esquerda', 40], ['Direita', 60, 'direita']] } },
   ] },
 
@@ -2512,6 +2527,8 @@ function resetWorld() {
   OBJ.being2.visible = false; OBJ.face.visible = false; OBJ.face.scale.setScalar(1); OBJ.face.material.map = OBJ.faceTex; OBJ.face.material.needsUpdate = true;
   OBJ.paper.visible = false; G.torch = false; G.hudDim = 0; G.shake = 0; torchLight.intensity = 0; CTX.bat = 21; G.hudKey = ''; renderHud();
   noteEl.innerHTML = ''; reachEl.innerHTML = '';
+  stageEl.classList.remove('gulp');
+  blobEl.classList.remove('go');
 }
 
 /* ---------------- texto ---------------- */
@@ -2542,9 +2559,20 @@ function showSay(spec) {
 
 /* ---------------- roteiro ---------------- */
 function beat() { return STORY[G.node].beats[G.i]; }
+
+/* despertar: só libera a história quando a visão clareia */
+const WAKE_MS = 5200;
+function wakeUp() {
+  G.waking = true;
+  stageEl.classList.remove('waking', 'gulp'); void stageEl.offsetWidth; stageEl.classList.add('waking');
+  clearTimeout(G.wakeT);
+  G.wakeT = setTimeout(() => { stageEl.classList.remove('waking'); G.waking = false; }, WAKE_MS);
+}
+
 function play() {
   clearTimeout(G.timer); G.ready = false; hintEl.classList.remove('on');
   const b = beat();
+  if (b.wake) wakeUp();
   if (b.bat != null) CTX.bat = b.bat;
   if (b.amb) SND.ambience(b.amb);
   const cut = b.cam && !Array.isArray(b.cam) && b.cam.cut;
@@ -2564,7 +2592,8 @@ function play() {
   hideChoice();
   const typed = b.type ? typeText(b.type) : Promise.resolve();
   typed.then(() => {
-    const wait = b.choice ? (b.choiceAt ?? 1100) : Math.min(b.auto || 900, 900);
+    let wait = b.choice ? (b.choiceAt ?? 1100) : Math.min(b.auto || 900, 900);
+    if (b.wake) wait = Math.max(wait, WAKE_MS + 200);
     setTimeout(() => {
       if (beat() !== b) return;
       G.ready = true;
@@ -2588,7 +2617,7 @@ function advance() {
   if (!G.started) return;
   if (G.typing) { G.typing.finish(); return; }
   const b = beat();
-  if (!G.ready || b.choice || b.end) return;
+  if (G.waking || !G.ready || b.choice || b.end) return;
   if (G.i < STORY[G.node].beats.length - 1) { G.i++; play(); }
 }
 function goNode(name) { G.node = name; G.i = 0; play(); }
@@ -2620,7 +2649,7 @@ function showChoice(c) {
 }
 function hideChoice() { choiceEl.hidden = true; choiceEl.innerHTML = ''; choiceEl.classList.remove('in', 'out'); }
 function pick(c, k, btn) {
-  if (!G.ready || !btn || performance.now() - (G.choiceAt || 0) < 700) return;
+  if (G.waking || !G.ready || !btn || performance.now() - (G.choiceAt || 0) < 700) return;
   const o = c.opts[k];
   if (!o[2]) {
     btn.classList.remove('nope'); void btn.offsetWidth; btn.classList.add('nope');
