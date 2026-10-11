@@ -257,8 +257,10 @@ a.opt:hover { transform: translateX(3px); box-shadow: -4px 0 0 var(--verm); }
    - Passagem (passagem: true): caminho intermediário com opções (um
      corredor com portas, a cabine do elevador). Pode ser atravessada
      sempre, mesmo igual; as voltas, se houver, valem só até acabarem.
-   - Opção com req exige uma memória (de qualquer ciclo) ou um objeto
-     (deste ciclo). Opção com se: 'id,!id' exige ter passado (ou não)
+   - Opção com req exige memórias (de qualquer ciclo) ou objetos (deste
+     ciclo); várias separadas por vírgula, todas exigidas.
+   - Trecho com gasta: [objetos] tira esses objetos dela (a chave que
+     fica na fechadura, o que ela trocou). Opção com se: 'id,!id' exige ter passado (ou não)
      por esses trechos neste ciclo.
    - Quadro que começa com {id,!id} só aparece se a condição valer.
    ============================================================ */
@@ -286,6 +288,10 @@ const MOTOR = (() => {
     return String(cond || '').split(',').map(s => s.trim()).filter(Boolean)
       .every(c => c[0] === '!' ? !viu(E, c.slice(1)) : viu(E, c));
   }
+  const lista = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
+  const tem = (E, x) => E.mem.has(x) || E.obj.has(x);
+  /* o que falta para a exigência de uma opção */
+  const falta = (req, E) => lista(req).filter(x => !tem(E, x));
   /* quadros que valem nesta passagem, sem a marca de condição */
   function cena(c, E) {
     return (c.cena || []).map(s => {
@@ -302,6 +308,7 @@ const MOTOR = (() => {
     const x = c || nd;
     (x.mem || []).forEach(m => E.mem.add(m));
     (x.obj || []).forEach(o => E.obj.add(o));
+    (x.gasta || []).forEach(o => E.obj.delete(o));
     return { nd, c, vez: n };
   }
   /* opções que saem deste conteúdo (go sem opções = um passo só) */
@@ -316,7 +323,7 @@ const MOTOR = (() => {
   function opcao(o, E, porId) {
     const alvo = alvoDe(o, porId);
     if (o.se && !vale(o.se, E)) return { ok: false, motivo: 'se', alvo };
-    if (o.req && !E.mem.has(o.req) && !E.obj.has(o.req)) return { ok: false, motivo: 'req', alvo };
+    if (falta(o.req, E).length) return { ok: false, motivo: 'req', alvo, falta: falta(o.req, E) };
     if (!alvo) return { ok: false, motivo: 'vazio' };
     const n = vez(E, alvo);
     if (!versao(alvo, n)) return { ok: false, motivo: alvo.conversa ? 'conversado' : 'visto', alvo };
@@ -351,7 +358,7 @@ const MOTOR = (() => {
     });
     return { trilha, E, avisos, ref: feito.join('~') };
   }
-  return { versao, voltasDe, novoEstado, novoCiclo, vale, cena, entra, saidas, opcao, percorre, viu };
+  return { lista, falta, versao, voltasDe, novoEstado, novoCiclo, vale, cena, entra, saidas, opcao, percorre, viu };
 })();
 if (typeof module !== 'undefined') module.exports = MOTOR;
 
@@ -363,9 +370,10 @@ if (typeof module !== 'undefined') module.exports = MOTOR;
    Formato de um nó:
      { id, t: título, k: 'des'|'jogo'|'rev'|'novo', bat, cena: [quadros],
        q: pergunta, ops: [opção], go: 'id' (segue sem escolha),
-       mem: [memórias ganhas], obj: [objetos do ciclo], fim: {t, n, d} }
+       mem: [memórias ganhas], obj: [objetos do ciclo], gasta: [objetos
+       que ela perde aqui], fim: {t, n, d} }
    Opção: { l: texto, p: votação original, n: nó filho | go: 'id',
-            req: memória ou objeto exigido, se: 'id,!id' (passou ou não
+            req: memórias/objetos exigidos (vírgula = todos), se: 'id,!id' (passou ou não
             por esses trechos neste ciclo), c: condição em texto }
    Voltas: volta: {cena, ops…} ou voltas: [...] = como o trecho fica
      quando ela passa de novo; conversa: true = é diálogo; passagem:
@@ -410,7 +418,8 @@ const escolhaToca = () => [
   { l: 'Ficar em silêncio', go: 'silencio' },
 ];
 
-function tronco(V) {
+function tronco(ver) {
+  const V = ver && ver.h ? Object.assign({ ajusta: ver.ajusta }, ver.h) : ver;
   const nota = (id, nd) => { if (V.notas && V.notas[id]) nd.cena = nd.cena.concat([].concat(V.notas[id]).map(s => 'N: ' + s)); return nd; };
   const no = (id, nd) => nota(id, Object.assign({ id }, nd));
   /* galho que a versão escreve; na árvore editável (V.base) fica vazio, esperando ser escrito */
@@ -753,6 +762,13 @@ function tronco(V) {
     { l: 'Esquerda', p: 40, n: gancho('esquerda', V.esquerda) },
     { l: 'Direita', p: 60, n: direita },
   ] });
+
+  /* a versão pode ajustar trechos do tronco (V.ajusta recebe acha(id)) */
+  if (V.ajusta) {
+    const porId = {};
+    (function w(nd) { if (!nd || porId[nd.id]) return; porId[nd.id] = nd; (nd.ops || []).forEach(o => w(o.n)); })(raiz);
+    V.ajusta(id => { if (!porId[id]) throw new Error('ajusta: trecho ' + id + ' não existe'); return porId[id]; });
+  }
 
   /* trechos soltos (deitar, as voltas): entram na primeira opção que aponta para eles */
   [deitar].forEach(solto => {
@@ -1264,6 +1280,811 @@ function tronco(V) {
               'As traças pousam primeiro nas mãos.',
               'Depois em tudo.',
             ], mem: ['Seu nome'], fim: { t: 'morte', n: 'As traças', d: 'Recomeço. Ela acorda no corredor lembrando de uma palavra: o próprio nome.' } } },
+        ],
+      },
+    },
+  });
+})();
+
+/* ============================================================
+   VERSÃO 1.2 — O Arquivo, segunda edição
+   A V1 mais longa: os mistérios demoram. Quatro marcas (símbolos que
+   ficam na pele de um ciclo para o outro) abrem o cadeado da porta
+   comum; uma chave abre só uma de duas portas; objetos que só servem
+   para trocar; tentativas contadas; bilhetes na letra cuidadosa que
+   mentem. Nenhum final chega antes do Ciclo IV.
+   Pensada para o 3D atual: quase tudo acontece em lugares que o jogo
+   já tem (ver "jogo").
+   ============================================================ */
+'use strict';
+(function () {
+  const I = 'Traça (I)', II = 'Tecla (II)', III = 'Vela (III)', IV = 'Agulha (IV)';
+  const MARCAS = [I, II, III, IV].join(',');
+
+  /* ---------- o Datilógrafo, no avesso das salas ---------- */
+  const emBranco = {
+    id: 'emBranco', t: 'Em branco', k: 'novo', cena: [
+      'Ela arranca a folha do rolo.',
+      'Ele para. Tudo para: o rangido, o vento, o zumbido da lâmpada.',
+      'Nada está sendo escrito.',
+      'Ele vira a cabeça. Não há rosto: uma folha em branco, presa no lugar dele.',
+      'Ela tenta dar um passo. O passo não acontece, porque ninguém o escreveu.',
+      'A mão dela está apoiada no teclado. Debaixo do dedo, uma tecla sem letra, com um desenho gasto: uma tecla. E dois riscos: II.',
+      'Ele tira a folha da mão dela, ajeita no rolo e bate uma linha. A tecla afunda, e o desenho fica na ponta do dedo dela.',
+      'M: Ela volta ao começo.',
+    ], mem: [II], fim: { t: 'recomeco', n: 'Em branco', d: 'Recomeço sem susto. A segunda marca fica na ponta do dedo: a tecla.' },
+  };
+  const rascunhos = {
+    id: 'rascunhos', t: 'Os rascunhos', k: 'novo', cena: [
+      'Ela puxa o rolo. É a história dela, linha por linha, desde o corredor.',
+      'Atrás da mesa, pilhas: CICLO I. CICLO II. CICLO XXXI. Algumas riscadas de cima a baixo.',
+      'Numa gaveta entreaberta, folhas e folhas com uma frase só, à mão: NÃO OLHE PARA TRÁS. As primeiras, tortas. As últimas, quase iguais à letra do bilhete da sala escura.',
+      'Ele para de bater. Espera.',
+      'M: Não está bom ainda.',
+    ], mem: ['O rascunho'], q: '?', ops: [
+      { l: 'Deixar ele continuar', n: {
+        id: 'rasgado', t: 'Rascunho rasgado', k: 'novo', cena: [
+          'Ela se afasta da mesa. Ele volta a bater.',
+          'M: Ela desiste de ler.',
+          'M: Ela volta para a sala.',
+          'Ela não volta. Está parada, e a máquina continua dizendo que ela anda.',
+          'Ele para. Lê o que escreveu.',
+          'Arranca a folha, amassa e joga na pilha mais alta.',
+          'M: De novo.',
+        ], fim: { t: 'recomeco', n: 'Rascunho rasgado', d: 'Recomeço sem susto. Nesta edição ele ainda não terminou o livro: a página que encaderna fica na sala de revisão.' } } },
+      { l: 'Voltar pela luz do "?"', go: 'abrir1' },
+    ],
+  };
+  const datilografo = {
+    id: 'datilografo', t: 'O Datilógrafo', k: 'novo', cena: [
+      'Um corredor apertado, entre o avesso de todas as salas. Através das paredes ela ouve a sala branca, o quarto, o corredor vermelho.',
+      'No fim, uma mesa. Uma máquina de escrever do tamanho de um piano. Um rolo de papel que desce até o chão e continua pelo chão.',
+      'Dobrado sobre a máquina, alguém muito longo, cinza. Os dedos de unhas pretas sobre as teclas: o braço que deu a lanterna.',
+      'Cada tecla que ele bate, algo acontece em algum lugar. Uma porta range. Uma lâmpada pisca.',
+      'M: Ela seguiu o braço.',
+      'M: Ninguém nunca seguiu o braço.',
+    ], voltas: [{ sempre: true, cena: [
+      'O corredor apertado. A máquina não parou desde a última vez.',
+      'Ele não levanta a cabeça.',
+    ] }], q: '?', ops: [
+      { l: 'Ler o que está escrito', n: rascunhos },
+      { l: 'Tirar o papel da máquina', n: emBranco },
+      { l: 'Pedir a máquina', req: 'A letra', n: {
+        id: 'pedido', t: 'Pedir a máquina', k: 'novo', conversa: true, cena: [
+          'Ela estende as mãos. Ele olha para elas como se lesse.',
+          'M: Ela tem a letra.',
+          'M: Ela não tem a página.',
+          'Sem parar de bater, ele aponta com o queixo para o fundo do corredor estreito: o avesso de uma porta comum. Do lado de cá, a ponta de um cadeado.',
+          'M: A página fica na revisão.',
+        ], go: 'datilografo' } },
+    ],
+  };
+
+  /* ---------- a porta comum: o cadeado e a sala de revisão ---------- */
+  const encadernada = {
+    id: 'encadernada', t: 'Encadernada', k: 'novo', cena: [
+      'Na última página do livro, uma linha para a assinatura de quem revisa.',
+      'Ela pega o lápis vermelho e assina.',
+      'Quando levanta o lápis, a assinatura não é a dela: é datilografada, e já estava ali.',
+      'M: Ela aprova.',
+      'As folhas do livro se levantam e a cobrem como um lençol. Um fio vermelho dá a volta, uma vez, duas.',
+      'No arquivo, no andar de cima, há um pacote novo. Com etiqueta.',
+    ], fim: { t: 'final', n: 'Encadernada', d: 'Final ruim. Ela aprova o rascunho e vira um pacote no arquivo. Não há recomeço.' },
+  };
+  const primeiroBilhete = {
+    id: 'primeiroBilhete', t: 'O primeiro bilhete', k: 'novo', cena: [
+      'Ela pega o lápis vermelho. A mão sabe antes dela.',
+      'Na linha em branco da errata, ela não escreve um nome.',
+      'Escreve: NÃO OLHE PARA TRÁS.',
+      'M: Ela tem a letra.',
+      'Ela dobra o papelzinho e o deixa cair pela fresta da janela.',
+      'Lá embaixo, quem acordou no corredor branco vai para a direita, até uma porta com luz por baixo. Encontra o bilhete no chão. Lê.',
+      'Não olha para trás.',
+      'Na estante, um volume novo, ainda sem lombada.',
+      'Longe, uma máquina continua treinando a letra dela.',
+    ], fim: { t: 'final', n: 'O primeiro bilhete', d: 'Ela passa a escrever, por fora da máquina, para quem acorda depois. Ficam abertos: quem treina a letra dela, e se quem acorda lá embaixo é outra pessoa.' },
+  };
+  const revisao = {
+    id: 'revisao', t: 'A sala de revisão', k: 'novo', cena: [
+      'Ela gira os discos olhando as próprias mãos: o pó da traça na palma, a tecla na ponta do dedo, a cera da vela, o ponto em forma de agulha no pulso.',
+      'Os discos clicam, um por um. O cadeado cai no rastro de tinta.',
+      'Uma sala pequena e limpa. A única com janela.',
+      'Uma estante de livros iguais, de lombada vermelha: DESTINO. Muitos volumes. O último diz: SEGUNDA EDIÇÃO.',
+      'Na mesa, um livro aberto e um lápis vermelho. Nas margens, correções: "corta", "de novo", "não está bom ainda".',
+      'Pela janela, lá embaixo, o corredor branco. Alguém está acordando nele.',
+    ], voltas: [{ sempre: true, cena: [
+      'A sala de revisão. O livro continua aberto na mesma página.',
+      'Lá embaixo, no corredor branco, ninguém. Só o pingo de tinta.',
+    ] }], q: '?', ops: [
+      { l: 'Ler a página aberta', n: {
+        id: 'errata', t: 'A errata', k: 'novo', cena: [
+          'É a primeira página. Uma linha só, datilografada:',
+          'D: Alguém acorda / num corredor branco.',
+          'Na margem, a lápis vermelho: QUEM?',
+          'Preso na página, um papelzinho:',
+          'D: ERRATA / Na página 1, onde se lê / "alguém", leia-se: / ____________',
+          'A linha está em branco. Esperando uma letra.',
+        ], mem: ['A errata'], q: '?', ops: [
+          { l: 'Escrever na linha em branco', req: 'A letra', n: primeiroBilhete },
+          { l: 'Decorar a errata e sair', go: 'direita' },
+          { l: 'Voltar à mesa', go: 'revisao' },
+        ] } },
+      { l: 'Olhar pela janela', n: {
+        id: 'janela', t: 'A janela', k: 'novo', cena: [
+          'Ela encosta a testa no vidro.',
+          'Lá embaixo, a pessoa do corredor branco acorda, a vista borrada. Tem o cabelo dela. Ou parecido.',
+          'Ela bate no vidro. Ninguém lá embaixo ouve.',
+          'A pessoa olha as setas, hesita e vai para a esquerda.',
+          'Atrás dela, na estante, um volume cai aberto: CICLO XXXI.',
+        ], go: 'revisao' } },
+      { l: 'Assinar o livro', n: encadernada },
+      { l: 'Voltar ao corredor', go: 'direita' },
+    ],
+  };
+  const cadeado = {
+    id: 'cadeado', t: 'A porta comum: o cadeado', k: 'novo', cena: [
+      'Na porta comum, onde antes só havia a maçaneta, um cadeado de ferro com quatro discos.',
+      'Cada disco gira entre desenhos gastos: uma mão, uma chave, uma traça, um olho, uma tecla, uma vela, uma agulha, uma porta.',
+      'Acima dos discos, pintados com a tinta do balde: I, II, III, IV.',
+      'Preso na fresta, um bilhete na letra cuidadosa.',
+      'B: Traça, vela, / agulha, tecla. / Não erre / de novo.',
+    ], voltas: [{ sempre: true, cena: [
+      'O cadeado de quatro discos.',
+      '{tentativa}Em volta dele, na porta, marcas de dedo vermelhas: uma para cada tentativa.',
+      'O bilhete continua na fresta.',
+    ] }], q: '?', ops: [
+      { l: 'Girar as quatro marcas, na ordem', req: MARCAS, n: revisao },
+      { l: 'Girar como diz o bilhete', n: {
+        id: 'letraErrada', t: 'A letra errada', k: 'novo', cena: [
+          'Ela gira: traça, vela, agulha, tecla. Como o bilhete diz.',
+          'Os discos clicam. O cadeado abre.',
+          'A porta dá para o escuro. Cheiro de papel guardado.',
+          'Ela entra. A porta fecha atrás dela, devagar, sem bater.',
+          'Do escuro, um som de asas de papel. Muitas.',
+          'M: Ela confiou na letra.',
+        ], fim: { t: 'morte', n: 'A letra errada', d: 'Recomeço. Um bilhete que mata: imitava a letra cuidadosa, e a ordem estava errada.' } } },
+      { l: 'Tentar uma combinação', n: {
+        id: 'tentativa', t: 'Tentar uma combinação', k: 'novo', cena: [
+          'Ela gira os discos ao acaso.',
+          'O cadeado não abre.',
+          'Na moldura vermelha mais perto da porta, a tinta escorre um pouco, como se alguém tivesse respirado nela.',
+          'M: Primeira tentativa.',
+        ], voltas: [
+          { cena: [
+            'Outra combinação. Nada.',
+            'As molduras do corredor estão mais perto da porta do que antes.',
+            'Uma delas está no chão, em volta dos pés dela.',
+            'M: Segunda tentativa.',
+          ] },
+          { cena: [
+            'A terceira combinação.',
+            'A moldura sobe: tornozelos, cintura, ombros. Fecha.',
+            'Não dói. É como posar para um retrato muito longo.',
+            'No corredor vermelho, há uma moldura a mais.',
+          ], fim: { t: 'morte', n: 'Emoldurada', d: 'Recomeço. Três tentativas por ciclo; a terceira não volta. Fica a pergunta: as molduras são gente?' } },
+        ], go: 'cadeado' } },
+      { l: 'Comparar a letra do bilhete', req: 'A letra', n: {
+        id: 'letraFalsa', t: 'A letra falsa', k: 'novo', cena: [
+          'Ela escreve ao lado, com o dedo na poeira da porta, o mesmo R.',
+          'O dela tem a perna torta. O do bilhete, não.',
+          'É quase a letra dela. Alguém treinou muito.',
+        ], mem: ['A letra falsa'], go: 'cadeado' } },
+      { l: 'Voltar', go: 'direita' },
+    ],
+  };
+
+  /* ---------- a Esquerda: a Costureira e a porta sem nome ---------- */
+  const portaSemNome = {
+    id: 'portaSemNome', t: 'A porta sem nome', k: 'novo', cena: [
+      'A porta não tem fresta. A plaquinha está em branco.',
+      'O lápis é curto, roído.',
+      'Embaixo da plaquinha, três furos de agulha, em fila.',
+      'No chão, um bilhete na letra cuidadosa.',
+      'B: Eu tentei três nomes. / Nenhum era o meu.',
+    ], voltas: [{ sempre: true, cena: [
+      'A porta sem nome. A plaquinha, em branco de novo.',
+      '{nomeQualquer}Os furos de agulha embaixo dela agora têm linha: alguém começou a costurar.',
+    ] }], q: '?', ops: [
+      { l: 'Escrever um nome qualquer', n: {
+        id: 'nomeQualquer', t: 'Um nome qualquer', k: 'novo', cena: [
+          'Ela escreve um nome. A letra sai firme, mas o nome não pesa nada.',
+          'A plaquinha bebe o grafite e fica branca de novo.',
+          'Atrás dela, a costura para. Um ponto. Dois. Depois recomeça.',
+          'M: Primeira tentativa.',
+        ], voltas: [
+          { cena: [
+            'Outro nome. A plaquinha bebe este também.',
+            'A costura para e não recomeça.',
+            'A Costureira está de pé, a agulha na mão, a cabeça inclinada, olhando a manga dela.',
+            'M: Segunda tentativa.',
+          ] },
+          { cena: [
+            'O terceiro nome.',
+            'A Costureira costura a plaquinha na porta. Depois a manga dela na plaquinha. Depois o resto.',
+            'Não dói. É como dormir dentro de um livro fechado.',
+          ], fim: { t: 'morte', n: 'Costurada', d: 'Recomeço. Três tentativas por ciclo; a terceira não volta.' } },
+        ], go: 'portaSemNome' } },
+      { l: 'Escrever seu nome', req: 'Seu nome', n: {
+        id: 'nomeRiscado', t: 'O nome riscado', k: 'novo', cena: [
+          'Ela escreve o nome que leu na etiqueta do próprio pacote.',
+          'A plaquinha aceita. Por um instante, a porta parece mais leve.',
+          'De dentro da porta, o som de uma máquina de escrever.',
+          'Uma linha datilografada passa sobre o nome, letra por letra, e o risca.',
+          'D: ERRATA / PENDENTE',
+          'A plaquinha fica em branco.',
+        ], go: 'portaSemNome' } },
+      { l: 'Escrever seu nome, como pede a errata', req: 'Seu nome,A errata', n: {
+        id: 'pontoFinal', t: 'Ponto final', k: 'novo', cena: [
+          'Ela escreve o nome que leu na etiqueta do próprio pacote.',
+          'Embaixo, copia a errata da sala de revisão: onde se lê "alguém", leia-se. E o nome de novo.',
+          'Enquanto escreve, percebe: é a mesma letra dos bilhetes que a ajudaram.',
+          'Dentro da porta, a máquina tenta riscar. A tecla bate, e o papel não aceita.',
+          'A plaquinha aceita.',
+          'A Costureira para de costurar. Com os dentes, desfaz um ponto da própria boca.',
+          '@bordado: VÁ',
+          'A porta abre para dentro. Não há luz branca nem vermelha. Há o cinza de uma manhã.',
+          'Atrás dela, o corredor começa a se desfazer em folhas.',
+          'M: Fim.',
+        ], fim: { t: 'final', n: 'Ponto final', d: 'A fuga. A errata corrige a primeira página: ela deixa de ser "alguém". Fica a dúvida: a página corrigida vale para quem acordar depois?' } } },
+      { l: 'Voltar', go: 'esquerda' },
+    ],
+  };
+
+  VERSOES.push({
+    n: '1.2', nome: 'O Arquivo, 2ª edição',
+    tese: 'A mesma V1, mais longa e mais lenta. O que muda é como se avança: a porta comum da Direita ganhou um cadeado de quatro discos, e cada disco pede uma marca que ela só ganha perdendo algo — a pele guarda o desenho de um ciclo para o outro. A chave da sala branca abre só uma das duas portas e fica presa na fechadura. Há coisas que só servem para trocar, e bilhetes na letra cuidadosa que mentem. Nenhum final chega antes do Ciclo IV, e cada um deixa ao menos uma pergunta aberta: quem treina a letra dela, quem conta os ciclos, o que são as molduras.',
+    criaturas: [
+      { nome: 'O Datilógrafo', d: 'O mesmo da V1, no avesso das salas. Nesta edição não entrega a máquina: manda buscar a página na revisão. Aparece em [[datilografo]].' },
+      { nome: 'A Costureira', d: 'Costura folhas na Esquerda. Aceita a fita da trilha em troca de um ponto no pulso dela (a quarta marca) e diz, sem dizer, que já recebeu aquela fita antes. Aparece em [[esquerda]] e [[trocaFita]].' },
+      { nome: 'O vulto que conta', d: 'O do andar inundado. De costas, sempre. Troca o relógio parado pela terceira marca e risca mais um na parede: está contando os ciclos dela. Aparece em [[baixo]] e [[trocaRelogio]].' },
+      { nome: 'As traças', d: 'Comem o que a luz toca. Uma delas deixa o pó da primeira marca. Aparecem em [[luz]], [[lida]] e [[asCegas]].' },
+      { nome: 'Quem imita a letra', d: 'Ninguém aparece. Há folhas de treino na gaveta do Datilógrafo ([[rascunhos]]) e bilhetes falsos na clareira ([[luz]]) e no cadeado ([[cadeado]]). O Leitor só diz que "quem escreve tudo não precisa de mão, mas quer ter uma" ([[quemImita]]).' },
+      { nome: 'O ser encolhido (o Leitor)', d: 'Só deixa ficar quem já perdeu três vezes ([[pedeFicar]]).' },
+    ],
+    vozes: { bordado: 'Bordado da Costureira' },
+    memorias: {
+      [I]: 'Primeira marca: o pó de uma traça na palma. Morrendo na clareira ao ler a pilha ([[lida]]).',
+      [II]: 'Segunda marca: o desenho da tecla na ponta do dedo. Tirando o papel da máquina do Datilógrafo ([[emBranco]]).',
+      [III]: 'Terceira marca: a cera de uma vela na palma. Trocando o relógio parado com o vulto do andar inundado ([[trocaRelogio]]).',
+      [IV]: 'Quarta marca: um ponto em forma de agulha no pulso. Trocando a fita da trilha com a Costureira ([[trocaFita]]). É a única que pode ser ganha e usada no mesmo ciclo.',
+      'A letra': 'Ela escreve com a letra dos bilhetes. Ignorando a batida ([[aLetra]]).',
+      'A letra falsa': 'Alguém imita a letra dela. Comparando o bilhete do cadeado ([[letraFalsa]]).',
+      'Seu nome': 'Lido na etiqueta do próprio pacote, no arquivo ([[seguirFio]] ou [[asCegas]]).',
+      'O rascunho': 'Os ciclos são rascunhos ([[rascunhos]] ou [[lida]]).',
+      'A errata': 'A primeira página diz "alguém" e espera a correção ([[errata]]).',
+    },
+    objetos: {
+      Lanterna: 'Do "?". Pode ser entregue ao braço (e aí a floresta mata).',
+      Chave: 'Do buraco CHAVE. Abre a porta dos espelhos ou a do elevador, e fica presa na primeira que abrir.',
+      'Fio vermelho': 'Da Costureira. Leva ao pacote com o nome dela, no arquivo.',
+      'Fita da trilha': 'Só serve para trocar: a Costureira a quer.',
+      'Relógio parado': 'Só serve para trocar: o vulto do andar inundado o quer.',
+    },
+    rotas: [
+      { f: 'O caminho mínimo (4 ciclos)', p: 'Ciclo I: lanterna → floresta → luz → Ler a pilha ([[lida]], marca I). Ciclo II: ? → Ignorar a batida → Escrever um bilhete (◆ A letra) → Ficar no quarto → Apagar → Entrar no buraco → Tirar o papel ([[emBranco]], marca II). Ciclo III: Esquerda → Estender o braço → … → Chave → Permanecer → porta nova (a chave fica presa) → meio: Pegar o relógio → baixo: Oferecer o relógio ([[trocaRelogio]], marca III) → cima: Seguir o fio (◆ Seu nome) → meio → Deitar. Ciclo IV: a marca IV e um dos finais abaixo. Refs. dos três primeiros ciclos: 2.2.2.1.1.2.2.2~2.2.2.1.2.1.1.1.1.1.2~1.1.1.2.2.2.1.1.2.2.2.1.3.1.1.1.2.1.2.1' },
+      { f: 'O primeiro bilhete', p: 'Ciclo IV (com A letra de qualquer ciclo, ou ganha de novo): ? → Ignorar → Escrever um bilhete → floresta → trilha: Desamarrar a fita → Voltar por onde veio → Bater → sala branca → Voltar pelo corredor vermelho → corredor branco → Esquerda: Oferecer a fita ([[trocaFita]]) → Direita → porta comum: Girar as quatro marcas ([[revisao]]) → Ler a página ([[errata]]) → Escrever na linha em branco ([[primeiroBilhete]]). Ref.: 2.2.2.1.1.2.2.2~2.2.2.1.2.1.1.1.1.1.2~1.1.1.2.2.2.1.1.2.2.2.1.3.1.1.1.2.1.2.1~2.2.2.1.2.1.1.2.1.4.3.1.1.4.3.1.2.1.4.2.1.1.1.1' },
+      { f: 'Ponto final', p: 'Com ◆ Seu nome: o mesmo Ciclo IV até a [[errata]] → Decorar a errata e sair → Esquerda → a porta sem nome → Escrever seu nome, como pede a errata ([[pontoFinal]]). Só o nome não basta ([[nomeRiscado]]). Ref.: 2.2.2.1.1.2.2.2~2.2.2.1.2.1.1.1.1.1.2~1.1.1.2.2.2.1.1.2.2.2.1.3.1.1.1.2.1.2.1~2.2.2.1.2.1.1.2.1.4.3.1.1.4.3.1.2.1.4.2.1.1.1.2.3.1.3.3' },
+      { f: 'A Vela', p: 'Com as marcas I, II e III: ? → floresta → trilha → toca no escuro → Quem é você? → Recentemente acordei → Ligar a lanterna → Dar meia volta → Ficar → Mostrar as marcas ([[aVela]]). Ref.: 2.2.2.1.1.2.2.2~2.2.2.1.2.1.1.1.1.1.2~1.1.1.2.2.2.1.1.2.2.2.1.3.1.1.1.2.1.2.1~2.2.2.1.1.2.1.2.1.1.1.3.1.1' },
+      { f: 'Encadernada', p: 'Na [[revisao]]: Assinar o livro. Ref.: 2.2.2.1.1.2.2.2~2.2.2.1.2.1.1.1.1.1.2~1.1.1.2.2.2.1.1.2.2.2.1.3.1.1.1.2.1.2.1~2.2.2.1.2.1.1.2.1.4.3.1.1.4.3.1.2.1.4.2.1.1.3' },
+    ],
+    jogo: [
+      'Memórias atravessam o ciclo: um conjunto G.mem que endCycle não zera. Objetos são as marcas do ciclo que já existem (G.flags); "gasta" apaga a marca; "req" vira o 4º campo da opção, ao contrário (fecha se faltar).',
+      'Tentativas contadas: contar quantas vezes o trecho foi visitado no ciclo e escolher a versão do trecho por esse número (o mesmo mecanismo das voltas).',
+      'Lugares que o 3D já tem: corredor branco (a ala esquerda está vazia), corredor vermelho e a porta comum (que já abre), sala branca e o avesso dos buracos, espelhos, elevador com arquivo, quarto e andar inundado, floresta com fita e luz distante, toca.',
+      'O que precisa ser construído: a Costureira e a porta sem nome na ala esquerda; o cadeado e uma sala pequena com janela atrás da porta comum; o poste e a mesa na luz distante; a mesa do Datilógrafo no fim do avesso; o relógio no quarto; riscos na parede do andar inundado.',
+    ],
+    ajusta(acha) {
+      const nota = (id, t) => acha(id).cena.push('N: ' + t);
+      nota('direita', 'nesta edição a porta comum tem um cadeado, e daqui se volta ao corredor branco.');
+      nota('abrir1', 'nesta edição, da sala branca dá para voltar pelo corredor vermelho.');
+      nota('permanecer', 'uma chave, duas portas: a chave fica presa na primeira que ela abrir.');
+      acha('buraco').obj = ['Lanterna'];
+      acha('chave').obj = ['Chave'];
+      acha('permanecer').ops.forEach(o => { o.req = 'Chave'; });
+      const presa = (id, cena) => { const nd = acha(id); nd.gasta = ['Chave']; nd.cena = cena.concat(nd.cena.slice(1)); };
+      presa('espelhos', ['A chave serve. Gira, e não sai mais: fica presa na fechadura.']);
+      presa('elevador', ['A chave serve. Gira, e não sai mais: fica presa na fechadura.']);
+      acha('elevador').voltas = [{ cena: ['A cabine de grade. Três botões sem número. O de baixo tem um dedo vermelho.'] }];
+      /* da sala branca dá para voltar; a sala continua mudada */
+      const sala = acha('abrir1');
+      sala.voltas[sala.voltas.length - 1].sempre = true;
+      sala.ops.push({ l: 'Voltar pelo corredor vermelho', go: 'direita' });
+      acha('vermelho').voltas = [{ sempre: true, cena: [
+        'A sala escura de novo. A fresta de luz sob a porta.',
+        'O bilhete do chão não está mais lá.',
+      ], ops: [{ l: 'Abrir a porta', go: 'abrir1' }] }];
+      const dir = acha('direita');
+      dir.ops[0].n = cadeado;
+      dir.ops.push({ l: 'Voltar ao corredor branco', go: 'inicio' });
+      acha('trilha').ops.push({ l: 'Desamarrar a fita', n: {
+        id: 'fita', t: 'Desamarrar a fita', k: 'novo', bat: '17%', cena: [
+          'Ela desamarra a fita do tronco mais perto. Sai fácil, como se alguém já tivesse desamarrado antes.',
+          'Sem ela, essa árvore fica igual a todas as outras.',
+          'M: Ela possui uma fita vermelha.',
+          'O neon continua aceso: DESLIGUE A LANTERNA PARA ENTRAR',
+        ], obj: ['Fita da trilha'], q: '?', ops: [
+          { l: 'Entrar com a lanterna ligada', go: 'ligada' },
+          { l: 'Entrar com a lanterna desligada', go: 'desligada' },
+          { l: 'Voltar por onde veio', go: 'voltar' },
+        ] } });
+    },
+    h: {
+      inicioVolta: [
+        'Ela volta ao corredor branco. A lâmpada zumbe mais baixo.',
+        'Da esquerda, o som de agulha atravessando papel.',
+        'O pingo de tinta no chão virou um rastro. Para a direita.',
+      ],
+      esquerda: {
+        t: 'Esquerda: o corredor cinza', k: 'novo', cena: [
+          'O lado que o vermelho não marca. As paredes são cinzentas, de um cinza de papel molhado.',
+          'Folhas soltas no chão, todas em branco. Ficam mais grossas a cada passo.',
+          'Um som de agulha atravessando papel. Muitas vezes.',
+          'Uma mulher curvada, sentada no chão, costura folhas umas nas outras com fio vermelho. A boca dela também está costurada.',
+          'O carretel ao lado dela está quase vazio.',
+          'Ela ergue um pano bordado sem levantar os olhos.',
+          '@bordado: AINDA / EM BRANCO',
+          'Ao fundo, uma porta sem moldura e sem maçaneta. Uma plaquinha vazia. Um lápis pendurado num barbante.',
+        ], voltas: [{ sempre: true, cena: [
+          'O corredor cinza de novo. As folhas no chão guardam as pegadas dela.',
+          'A Costureira não saiu do lugar.',
+          '{trocaFita}No pano bordado, a agulha que ela desenhou ainda está ali.',
+          '{!trocaFita}O carretel está vazio. Ela costura com a última ponta de fio.',
+        ] }], q: '?', ops: [
+          { l: 'Estender o braço', n: {
+            id: 'fio', t: 'O fio', k: 'novo', cena: [
+              'Ela pega o pulso dela com cuidado.',
+              'Dá três pontos na manga, com fio vermelho. Não dói.',
+              'O fio continua: sai da agulha e corre pelo chão, para trás, de volta ao começo.',
+              '@bordado: PARA ACHAR / O QUE É / SEU',
+              'Ela volta a costurar. Não olha mais.',
+              'O fio puxa de leve. Para a direita.',
+            ], obj: ['Fio vermelho'], go: 'direita' } },
+          { l: 'Oferecer a fita', req: 'Fita da trilha', n: {
+            id: 'trocaFita', t: 'A fita', k: 'novo', cena: [
+              'Ela estende a fita vermelha da trilha, ainda com terra.',
+              'A Costureira para. Pela primeira vez, levanta os olhos.',
+              'Mede a fita entre os dedos, como quem reconhece.',
+              '@bordado: VOCÊ / JÁ ME TROUXE / ESTA FITA',
+              'Ela enfia a fita na agulha e dá um ponto só no pulso dela, em forma de agulha. Ao lado, quatro riscos: IV.',
+              'Depois borda mais uma linha no pano.',
+              '@bordado: ELE ESCREVE. / EU AMARRO.',
+              'Ela vira o pano para dentro e volta a costurar. A fita não volta.',
+            ], gasta: ['Fita da trilha'], mem: [IV], go: 'esquerda' } },
+          { l: 'Ir até a porta', n: portaSemNome },
+          { l: 'Voltar', go: 'inicio' },
+        ],
+      },
+
+      ignorar: {
+        t: 'Ignorar a batida', k: 'novo', bat: '21%', cena: [
+          'Ela não se mexe.',
+          'S: Toc Toc',
+          'S: Toc Toc',
+          'A batida para. Depois de um tempo, um papel desliza por baixo da porta.',
+          'B: Boa. / Não abra para ele / com pressa.',
+          'Na parede, o buraco "?" se abriu de novo, um pouco.',
+          'O braço de garras sai devagar. Entre os dedos, um lápis e uma folha em branco.',
+        ], q: '?', ops: [
+          { l: 'Escrever um bilhete', n: {
+            id: 'aLetra', t: 'A letra', k: 'novo', cena: [
+              'Ela não sabe o que escrever. A mão sabe.',
+              'A mão escreve: NÃO OLHE PARA TRÁS.',
+              'É a mesma letra do bilhete da sala escura. A mesma inclinação. A mesma perna torta no R.',
+              'O braço pega a folha com cuidado e a leva para dentro da parede.',
+              'M: Ela tem a letra.',
+              'A porta cinza se abre sozinha. Vento de floresta.',
+            ], mem: ['A letra'], go: 'abrir2' } },
+          { l: 'Devolver o lápis', n: {
+            t: 'O lápis devolvido', k: 'novo', cena: [
+              'Ela põe o lápis na palma cinza.',
+              'A mão se fecha devagar. Depois se abre de novo, pedindo.',
+              'Pedindo a lanterna.',
+            ], q: '?', ops: [
+              { l: 'Entregar a lanterna', n: {
+                t: 'Sem luz', k: 'novo', cena: [
+                  'O braço leva a lanterna. O buraco se fecha.',
+                  'M: Ela não possui uma lanterna.',
+                  'No escuro, a porta cinza se abre.',
+                  'Um papel cai lá de cima, devagar.',
+                  'A: AGORA SIM',
+                  'Ela não vê as pernas. Sente o vento que elas fazem.',
+                  'Ela dá um passo. Depois outro. Depois nenhum.',
+                ], gasta: ['Lanterna'], fim: { t: 'morte', n: 'Sem luz', d: 'Recomeço. Paga o aviso "sem luz você não dura nem até a primeira árvore".' } } },
+              { l: 'Segurar a lanterna', n: {
+                t: 'A mão que espera', k: 'novo', cena: [
+                  'Ela aperta a lanterna contra o peito.',
+                  'A mão fica ali, aberta, esperando. Muito tempo.',
+                  'Depois recua para dentro da parede, sem pressa, como quem vai voltar.',
+                  'A porta cinza se abre sozinha.',
+                ], go: 'abrir2' } },
+            ] } },
+        ],
+      },
+
+      ficar: {
+        t: 'Ficar no quarto', k: 'novo', bat: '20%', cena: [
+          'Ela fecha a porta. A floresta fica do outro lado.',
+          'Um papel entra por baixo da porta.',
+          'A: POR FAVOR',
+          'Outro.',
+          'A: AQUI FORA / É MUITO / ESCURO',
+          'Outro. E outro. Eles cobrem o chão.',
+          'A: EU SÓ / QUERO VER',
+          'A lanterna pisca.',
+        ], q: '?', ops: [
+          { l: 'Apagar a lanterna', n: {
+            t: 'No escuro do quarto', k: 'novo', cena: [
+              'S: click',
+              'Os papéis param de entrar.',
+              'Silêncio do outro lado. Depois, passos enormes se afastando.',
+              'Na parede do fundo, um risco de luz: o buraco "?" está aberto de novo, e maior.',
+              'O braço de garras sai, aponta para dentro e recua.',
+              'D: Paciência é rara. / Venha.',
+            ], q: '?', ops: [
+              { l: 'Entrar no buraco', go: 'datilografo' },
+              { l: 'Abrir a porta', go: 'frente' },
+            ] } },
+          { l: 'Abrir a porta', go: 'frente' },
+        ],
+      },
+
+      luz: {
+        t: 'Ir em direção à luz: o candeeiro', k: 'novo', bat: '18%', cena: [
+          'Ela sai da trilha. A luz branca fica maior, mas não mais perto. Depois, de repente, perto.',
+          'Uma clareira. Um poste de luz antigo no meio das árvores, como numa rua que não existe.',
+          'Debaixo dele, uma mesa. Sobre a mesa, uma máquina de escrever batendo sozinha.',
+          'Em volta da lâmpada, traças cinzentas do tamanho de mãos. Algumas descem até a lanterna dela.',
+          'Ao lado da máquina, uma pilha de folhas datilografadas. A de cima:',
+          'D: REGRA NÚMERO 2: / O QUE A LUZ TOCA, / AS TRAÇAS COMEM.',
+          'Preso no poste, na altura dos olhos, um bilhete na letra cuidadosa:',
+          'B: A luz da clareira / é segura. / Fique debaixo dela / até amanhecer.',
+        ], q: '?', ops: [
+          { l: 'Desligar a lanterna', n: {
+            id: 'naoVeem', t: 'O que as traças não veem', k: 'novo', cena: [
+              'S: click',
+              'As traças sobem todas para o poste.',
+              'No escuro fora da clareira há gente de pé entre as árvores. Parada. Feita de folhas dobradas, com furos onde as traças comeram.',
+              'Ninguém se mexe.',
+              'Duas pernas pálidas passam pela borda da clareira, devagar, desviando da luz do poste.',
+              'Ele não a vê. Ela segue, no escuro, o caminho que as pernas abriram.',
+              'A fita vermelha, de novo, entre os troncos.',
+            ], go: 'trilha' } },
+          { l: 'Ler a pilha de papel', n: {
+            id: 'lida', t: 'A pilha', k: 'novo', cena: [
+              'As folhas contam o que ela fez desde o corredor. Tudo. Até o que ela só pensou.',
+              'No alto da primeira: CICLO I. Embaixo, outras pilhas: CICLO II, CICLO III… algumas riscadas inteiras.',
+              'A última linha da última folha:',
+              'M: Ela lê a própria história e as traças descem.',
+              'Elas descem.',
+              'Uma, maior, pousa na palma dela. O pó das asas desenha uma traça. E um risco: I.',
+              'Não é rápido. É o som de alguém folheando um livro grosso, muito perto do ouvido.',
+            ], mem: ['O rascunho', I], fim: { t: 'morte', n: 'Lida', d: 'Recomeço lento. Ela leva o rascunho e a primeira marca: o pó da traça na palma, que não sai.' } } },
+          { l: 'Ficar debaixo da luz', n: {
+            id: 'clareira', t: 'Debaixo da luz', k: 'novo', cena: [
+              'Ela fica onde a luz cai inteira, como o bilhete pediu.',
+              'As traças descem devagar, como neve ao contrário.',
+              'Elas não mordem. Pousam. Leem.',
+              'Ninguém amanhece.',
+              'M: Ela confiou na letra.',
+            ], fim: { t: 'morte', n: 'Debaixo da luz', d: 'Recomeço. Um bilhete que mata: a letra cuidadosa nem sempre é de quem ajuda. E não deixa marca.' } } },
+        ],
+      },
+
+      ligada: {
+        t: 'Entrar com a lanterna ligada', k: 'novo', cena: [
+          'A porta cai para trás como alçapão, e a luz cai junto.',
+          'A toca inteira, à luz: paredes de papel úmido, empilhado até o teto.',
+          'No meio, a figura encolhida cobre os olhos com os braços. A pele dele é cheia de furos pequenos e redondos, como papel comido.',
+          'Em volta dele, dormindo, duas formas vermelhas enormes.',
+          'F: APAGUE.',
+          'F: APAGUE, / POR FAVOR.',
+        ], q: '?', ops: [
+          { l: 'Apagar', n: {
+            t: 'Tarde', k: 'novo', conversa: true, cena: [
+              'S: click',
+              'A vela.',
+              'F: ...ELAS / NÃO ACORDARAM.',
+              'F: DESSA VEZ.',
+            ], voltas: [{ sempre: true, cena: [
+              'S: click',
+              'A vela.',
+              'F: DE NOVO / COM ESSA LUZ.',
+            ] }], q: '?', ops: escolhaToca() } },
+          { l: 'Manter acesa', n: {
+            t: 'À luz', k: 'novo', cena: [
+              'A luz fica nele. Ele chora sem som.',
+              'As formas vermelhas se desenrolam.',
+              'F: VOCÊ / NÃO SABE / O QUE ESTÁ / ACORDANDO.',
+            ], go: 'ligar' } },
+        ],
+      },
+
+      voltar: {
+        t: 'Voltar por onde veio', k: 'novo', bat: '16%', cena: [
+          'Ela dá as costas para a porta vermelha.',
+          'As fitas da trilha estão desamarradas, caídas no chão, como se alguém tivesse passado recolhendo.',
+          'Sem a fita, todas as árvores são a mesma árvore.',
+          'Muito depois, uma porta cinza no meio da floresta. A porta do quarto, fechada, vista de fora.',
+        ], q: '?', ops: [
+          { l: 'Bater', n: {
+            t: 'Quem bate', k: 'novo', cena: [
+              'S: Toc Toc',
+              'Do outro lado, alguém prende a respiração.',
+              'Ninguém abre. Ninguém responde.',
+              'Ela reconhece a batida. É a que ela ouviu lá de dentro.',
+              'A porta se abre sozinha.',
+            ], go: 'abrir1' } },
+          { l: 'Esperar', n: {
+            t: 'Espera', k: 'novo', bat: '15% → 0%', cena: [
+              'Ela senta encostada na porta. A lanterna desce: 15, 14, 13.',
+              'Papéis começam a cair em volta, devagar.',
+              'A: VOCÊ / VOLTOU',
+              'A: NINGUÉM / VOLTA',
+              'A lanterna apaga.',
+              'Ela não olha para cima. Não precisa: ele desce até a altura dos olhos dela.',
+            ], fim: { t: 'morte', n: 'A porta fechada', d: 'Recomeço.' } } },
+        ],
+      },
+
+      onde: {
+        t: 'Onde eu estou?', k: 'novo', cena: [
+          'F: NUMA PÁGINA / QUE AINDA / NÃO FOI / VIRADA.',
+          'F: LÁ EM CIMA / ALGUÉM ESCREVE / TUDO O QUE / ACONTECE.',
+          'F: AQUI EMBAIXO / NÃO.',
+          'F: E VOCÊ? / ACORDOU / NUM CORREDOR?',
+        ], q: '...', ops: escolhaQuem(),
+      },
+      como: {
+        t: 'Como eu saio daqui?', k: 'novo', cena: [
+          'F: TODA PORTA / DAQUI / DÁ EM OUTRA / PORTA.',
+          'F: MENOS UMA.',
+          'F: À ESQUERDA / DO COMEÇO / TEM UMA / SEM NOME.',
+          'F: NUNCA VI / NINGUÉM / SABER O PRÓPRIO / NOME.',
+          'F: E VOCÊ? / ACORDOU / NUM CORREDOR?',
+        ], q: '...', ops: escolhaQuem(),
+      },
+      porque: {
+        t: 'Por que você não suporta a luz?', k: 'novo', cena: [
+          'F: A LUZ / CHAMA / AS TRAÇAS.',
+          'F: ELAS COMERAM / TUDO O QUE / EU SABIA / DE MIM.',
+          'Ele estende o braço até a vela. A pele é cheia de furos redondos.',
+          'F: SÓ SOBROU / O CORREDOR.',
+          'F: VOCÊ TAMBÉM / ACORDOU / NUM CORREDOR?',
+        ], q: '...', ops: escolhaQuem(),
+      },
+      perguntasExtras: [
+        { l: 'Você conhece esta letra?', req: 'A letra', n: {
+          id: 'conheceLetra', t: 'Você conhece esta letra?', k: 'novo', cena: [
+            'Ela escreve no chão, com o dedo, à luz da vela: NÃO OLHE PARA TRÁS.',
+            'Ele chega o rosto perto. Muito perto.',
+            'F: ESSA LETRA / ME DEU / A LANTERNA, / UMA VEZ.',
+            'F: ANTES / DAS TRAÇAS.',
+            'Os olhos dele acendem em vermelho, mas ele recua.',
+            'F: ...MAS VOCÊ / AINDA ESTÁ / FRESCA.',
+          ], q: '?', ops: escolhaCorredor() } },
+        { l: 'Quem imita esta letra?', req: 'A letra falsa', n: {
+          id: 'quemImita', t: 'Quem imita esta letra?', k: 'novo', cena: [
+            'Ela desenha no chão o R sem a perna torta, o do bilhete falso.',
+            'Ele olha muito tempo.',
+            'F: QUEM / ESCREVE / TUDO',
+            'F: NÃO PRECISA / DE MÃO.',
+            'F: MAS QUER / TER / UMA.',
+            'Ele esconde as próprias mãos debaixo dos braços. Os olhos acendem.',
+          ], q: '?', ops: escolhaCorredor() } },
+      ],
+
+      naoLembro: {
+        t: 'Também não lembro quem sou', k: 'novo', bat: '16%', cena: [
+          'Ele fica muito tempo em silêncio.',
+          'F: ENTÃO / VOCÊ JÁ / ESTÁ SECA.',
+          'F: COMO EU.',
+          'F: NÃO TENHO / O QUE LER / EM VOCÊ.',
+          'Ele aponta para o alçapão.',
+          'F: VÁ, / ANTES QUE / ELAS SINTAM / O CHEIRO.',
+          'Ela sobe no escuro. A floresta. Sem fuga, sem nevoeiro.',
+          'Na trilha, as pernas do ser alto.',
+        ], q: SER_ALTO_Q, ops: escolhaSerAlto(),
+      },
+
+      fugir: {
+        t: 'Fugir no escuro', k: 'novo', cena: [
+          'Ela corre sem ver nada. Mãos nas paredes. As paredes são de papel; cedem.',
+          'Atrás, algo muito grande se desdobra.',
+          'F: NÃO CORRA.',
+          'F: ELAS OUVEM / O PAPEL.',
+        ], q: '?', ops: [
+          { l: 'Parar', n: {
+            t: 'Parada', k: 'novo', bat: '16%', cena: [
+              'Ela para. Não respira.',
+              'Uma coisa passa ao lado dela, tão perto que a folha da parede encosta no rosto.',
+              'Passa.',
+              'Mais adiante, um degrau. Outro. Uma escada de papel prensado.',
+              'A floresta. A trilha. As pernas.',
+            ], q: SER_ALTO_Q, ops: escolhaSerAlto() } },
+          { l: 'Continuar correndo', n: {
+            t: 'O som do papel', k: 'novo', cena: [
+              'Cada passo rasga uma folha.',
+              'O barulho é alto demais.',
+              'Uma mão do tamanho de uma porta se fecha em volta dela, sem pressa.',
+              'F: AINDA / FRESCA.',
+            ], fim: { t: 'morte', n: 'Fresca', d: 'Recomeço, sem bote: a mão fecha devagar.' } } },
+        ],
+      },
+
+      passar: {
+        t: 'Passar correndo', k: 'novo', bat: '14%', cena: [
+          'Ela abaixa a cabeça e corre entre as pernas.',
+          'Papéis caem à volta dela, cada vez mais rápido.',
+          'A: OLHE',
+          'A: OLHE PARA MIM',
+          'A: SÓ UMA VEZ',
+          'Ela não olha.',
+          'A trilha acaba numa parede de madeira crua, no meio das árvores, com papel colado por trás: o avesso de uma sala.',
+          'Um buraco "?", aceso por dentro. O braço de garras sai, aponta para dentro e recua.',
+          'D: Ninguém passa / sem olhar. / Venha.',
+        ], q: '?', ops: [
+          { l: 'Entrar no buraco', go: 'datilografo' },
+          { l: 'Ficar do lado de fora', n: {
+            t: 'Do lado de fora', k: 'novo', bat: '14% → 0%', cena: [
+              'Ela senta encostada na parede. A lanterna desce: 13, 12, 11.',
+              'Do outro lado da madeira, uma máquina de escrever bate devagar, como quem espera.',
+              'M: Ela não entra.',
+              'M: Ela fica com frio.',
+              'Ela fica com frio.',
+            ], fim: { t: 'recomeco', n: 'Do lado de fora', d: 'Recomeço sem susto.' } } },
+        ],
+      },
+
+      meiaVolta: {
+        t: 'Dar meia volta', k: 'novo', conversa: true, voltas: [{ sempre: true, cena: [
+          'Ela volta até a porta vermelha. Desce.',
+          'A vela. Ele não diz "voltou". Só afasta os joelhos, abrindo espaço do outro lado da chama.',
+        ] }], cena: [
+          'Ela volta até a porta vermelha deitada no chão. Desce.',
+          'A vela ainda está acesa. Ele está sentado onde estava, como se ela nunca tivesse saído.',
+          'F: VOLTOU.',
+          'F: NINGUÉM / VOLTA.',
+          'As formas vermelhas dormem de novo, encostadas na parede.',
+          'F: AQUI EMBAIXO / NINGUÉM ESCREVE / O QUE ACONTECE.',
+          'F: ENTÃO / NÃO ACONTECE / NADA.',
+        ], q: '...', ops: [
+          { l: 'Ficar', n: {
+            id: 'pedeFicar', t: 'Ficar', k: 'novo', cena: [
+              'Ela apaga a lanterna e senta do outro lado da vela.',
+              'Ele chega o rosto perto das mãos dela, como quem lê uma etiqueta.',
+              'F: QUEM FICA / JÁ PERDEU / O BASTANTE.',
+              'F: QUANTAS / VEZES?',
+            ], q: '...', ops: [
+              { l: 'Mostrar as marcas', req: [I, II, III].join(','), n: {
+                id: 'aVela', t: 'A Vela', k: 'novo', cena: [
+                  'Ela abre as mãos à luz da vela: o pó da traça, a tecla na ponta do dedo, a cera.',
+                  'Ele toca cada marca com cuidado, sem apertar.',
+                  'F: TRÊS.',
+                  'F: FIQUE.',
+                  'Ela apaga a lanterna de vez.',
+                  'O tempo não passa, porque ninguém escreve que ele passa.',
+                  'Ela esquece o corredor vermelho. Depois a floresta. Depois as marcas.',
+                  'Fica uma coisa só: acordar num corredor.',
+                  'Um dia, alguém desce pelo alçapão com a lanterna apagada.',
+                  'F: OLÁ.',
+                ], fim: { t: 'final', n: 'A Vela', d: 'Ela fica no único lugar que ninguém escreve. Agora é ela quem fala em vermelho no escuro. Fica aberto: o que ele perdeu para poder ficar?' } } },
+              { l: 'Não sei', n: {
+                id: 'aindaFresca', t: 'Ainda fresca', k: 'novo', cena: [
+                  'F: NÃO SABE.',
+                  'F: ENTÃO / AINDA / NÃO PERDEU.',
+                  'Ele cobre os olhos dela com a mão. A mão é fria e cheia de furos.',
+                  'F: DURMA.',
+                  'F: VOLTE / QUANDO / TIVER / PERDIDO.',
+                ], fim: { t: 'recomeco', n: 'Ainda fresca', d: 'Recomeço sem susto. A Vela pede as três primeiras marcas.' } } },
+            ] } },
+          { l: 'Ir embora', n: {
+            t: 'A vela acesa', k: 'novo', cena: [
+              'Ela se levanta.',
+              'F: ENTÃO / LEVE / ISTO.',
+              'Ele estende a vela vermelha.',
+              'Quando ela pega a vela, as formas vermelhas abrem os olhos. Todas olham para a chama.',
+              'Ela entende tarde que a vela era o que as mantinha dormindo.',
+            ], fim: { t: 'morte', n: 'A vela acesa', d: 'Recomeço.' } } },
+        ],
+      },
+
+      espelhoPortal: {
+        t: 'Continuar olhando', k: 'rev', cena: [
+          'O reflexo apaga. Duas luzes.',
+          'O espelho cede.',
+          'O avesso da parede dos buracos: madeira crua, papel colado por trás, os dois buracos vistos de dentro.',
+          'O braço de garras espera junto ao "?". Ele a vê e recua.',
+          'Mas não volta para a parede: recua por um corredor estreito, entre o avesso de todas as salas.',
+        ], q: '?', ops: [
+          { l: 'Seguir a luz do "?"', go: 'abrir1' },
+          { l: 'Seguir o braço', n: datilografo },
+        ],
+      },
+
+      cima: {
+        t: 'Botão de cima: o arquivo', k: 'rev', cena: [
+          'O arquivo: estantes até o escuro, pacotes de papel amarrados com fio vermelho.',
+          'Cada pacote tem um nome na etiqueta. Alguns riscados.',
+          'Na máquina de escrever, um papel.',
+          'D: VOCÊ NÃO DEVIA / TER SUBIDO / SEM LUZ.',
+          'As luzes começam a apagar, uma a uma, do fundo para a cabine.',
+        ], volta: { cena: [
+          'O arquivo, de novo. Escuro desde a última vez.',
+          'Na máquina, o papel mudou:',
+          'D: ELA VOLTA / PARA LER / O QUE JÁ LEU.',
+        ] }, q: '?', ops: [
+          { l: 'Correr para a cabine', go: 'elevador' },
+          { l: 'Seguir o fio', req: 'Fio vermelho', n: {
+            id: 'seguirFio', t: 'O fio puxa', k: 'novo', cena: [
+              'No escuro total, o fio vermelho da manga se estica.',
+              'Puxa para o lado, entre duas estantes.',
+              'Ela segue com a mão no fio até um pacote morno.',
+              'Não precisa de luz. Os dedos reconhecem as letras da etiqueta.',
+              'O nome dela.',
+              'Ela repete o nome baixinho, três vezes, para não esquecer.',
+              'O fio puxa de volta até a grade. A cabine.',
+              'M: Ela encontrou o próprio nome.',
+            ], mem: ['Seu nome'], go: 'elevador' } },
+          { l: 'Procurar no escuro', n: {
+            id: 'asCegas', t: 'Às cegas', k: 'novo', cena: [
+              'Ela tateia os pacotes. As etiquetas são ásperas, escritas com força.',
+              'Atrás dela, um som de asas de papel.',
+              'Uma etiqueta tem um relevo conhecido. Ela passa o dedo nas letras, uma por uma, e lê o próprio nome no escuro.',
+              'As traças pousam primeiro nas mãos.',
+              'Depois em tudo.',
+            ], mem: ['Seu nome'], fim: { t: 'morte', n: 'As traças', d: 'Recomeço. Ela acorda no corredor lembrando de uma palavra: o próprio nome.' } } },
+        ],
+      },
+
+      meio: {
+        t: 'Botão do meio: o quarto', k: 'rev', cena: [
+          'O quarto de alguém. A cama ainda tem a forma de quem dormia. Um copo d\'água.',
+          'Na mesa de cabeceira, um relógio de bolso parado. Os números do mostrador foram raspados.',
+          'No travesseiro:',
+          'B: NÃO DEITE. / EU DEITEI UMA VEZ / E ACORDEI / NO CORREDOR.',
+          'S: Toc Toc',
+        ], volta: { sempre: true, cena: [
+          'O quarto de novo. O copo d\'água está vazio.',
+          '{relogio}Na mesa de cabeceira, a marca redonda do relógio na poeira.',
+          'A forma no colchão ficou mais funda, e agora tem o tamanho dela.',
+          'S: Toc Toc',
+        ] }, q: '?', ops: [
+          { l: 'Deitar na cama', p: 45, go: 'deitar' },
+          { l: 'Pegar o relógio', n: {
+            id: 'relogio', t: 'O relógio parado', k: 'novo', cena: [
+              'Ela pega o relógio. É mais pesado do que parece.',
+              'Não faz tique-taque. Encostado no ouvido, faz um som de água.',
+              'M: Ela possui um relógio parado.',
+              'A batida na porta para quando ela guarda o relógio.',
+            ], obj: ['Relógio parado'], go: 'elevador' } },
+          { l: 'Voltar ao elevador', p: 55, go: 'elevador' },
+        ],
+      },
+
+      baixo: {
+        t: 'Botão de baixo: o andar inundado', k: 'rev', cena: [
+          'Andar inundado. Velas vermelhas boiando. Um vulto de costas, com água até a cintura.',
+          'A cabine sobe sem ela.',
+          'Uma vela apaga. Ele está mais perto, sem ter se mexido.',
+          'Na parede atrás dele, riscos vermelhos em grupos de cinco. Centenas.',
+        ], q: '?', ops: [
+          { l: 'Oferecer o relógio', req: 'Relógio parado', n: {
+            id: 'trocaRelogio', t: 'O vulto que conta', k: 'novo', cena: [
+              'Ela estende o relógio parado.',
+              'Ele não se vira. Um braço muito comprido vem por trás do corpo dele e pega o relógio.',
+              'Ele o encosta no ouvido. Fica muito tempo assim.',
+              'As velas param de apagar.',
+              'Ele ergue uma vela da água e encosta a base na palma dela. A cera quente desenha uma vela pequena. E três riscos: III.',
+              'A marca não sai.',
+              'Na parede, ele risca mais um.',
+              'A cabine desce de volta, devagar, e abre a grade.',
+            ], gasta: ['Relógio parado'], mem: [III], go: 'elevador' } },
+          { l: 'Esperar', n: {
+            id: 'asVelas', t: 'As velas', k: 'jogo', cena: [
+              'Outra vela apaga.',
+              'A última.',
+              'O rosto. O bote.',
+            ], fim: { t: 'morte', n: 'As velas', d: 'Recomeço.' } } },
         ],
       },
     },
@@ -2640,6 +3461,8 @@ function prepara(ver) {
     (nd.ops || []).forEach((o, k) => { if (o.n) walk(o.n, ref ? ref + '.' + (k + 1) : String(k + 1), nd, o); });
   })(ver.raiz, '', null, null);
   ver.cache = {};
+  /* nomes de memórias (o resto do que as opções exigem são objetos do ciclo) */
+  ver.memNomes = new Set(ver.lista.flatMap(n => [].concat(n.mem || [], ...MOTOR.voltasDe(n).map(x => x.mem || []))));
   ver.lista.forEach(nd => {
     const marca = (alvo, rot) => { (ver.chegam[alvo] = ver.chegam[alvo] || []).push({ de: nd, rot }); };
     if (nd.go) marca(nd.go, 'segue');
@@ -2649,7 +3472,7 @@ function prepara(ver) {
 /* conserta para salvar: tira campos calculados (pai, ref…) */
 function limpo(nd) {
   const o = {};
-  ['id', 't', 'k', 'bat', 'cena', 'q', 'go', 'mem', 'obj', 'fim', 'conversa', 'passagem', 'volta', 'voltas'].forEach(k => { if (nd[k] != null && nd[k] !== '' && !(Array.isArray(nd[k]) && !nd[k].length)) o[k] = clone(nd[k]); });
+  ['id', 't', 'k', 'bat', 'cena', 'q', 'go', 'mem', 'obj', 'gasta', 'fim', 'conversa', 'passagem', 'volta', 'voltas'].forEach(k => { if (nd[k] != null && nd[k] !== '' && !(Array.isArray(nd[k]) && !nd[k].length)) o[k] = clone(nd[k]); });
   if (nd.ops) o.ops = nd.ops.map(op => {
     const r = {}; ['l', 'p', 'req', 'se', 'c', 'go'].forEach(k => { if (op[k] != null && op[k] !== '') r[k] = op[k]; });
     if (op.n) r.n = limpo(op.n); return r;
@@ -2658,7 +3481,7 @@ function limpo(nd) {
 }
 
 const VERS = {};
-VERSOES.forEach(v => { v.raiz = tronco(v.h); v.chave = String(v.n); prepara(v); VERS[v.chave] = v; });
+VERSOES.forEach(v => { v.raiz = tronco(v); v.chave = String(v.n).replace('.', ''); prepara(v); VERS[v.chave] = v; });
 const MINHA = { chave: 'm', n: 'm', nome: 'Minha árvore', editavel: true };
 function baseDoJogo() { return limpo(tronco({ base: true })); }
 function carregaMinha() {
@@ -2692,7 +3515,7 @@ const passo = (ref, k) => ref === '' || ref.endsWith('~') ? ref + k : ref + '.' 
 function vaiPara(v, ref) { location.hash = '#' + v + '/' + (ref || '0'); }
 function vaiId(id) { const nd = ver().porId[id]; if (nd) vaiPara(S.v, nd.ref); }
 function leHash() {
-  const m = location.hash.match(/^#([1-9]|m)\/?([\d.~]*)/);
+  const m = location.hash.match(/^#(\d+|m)\/?([\d.~]*)/);
   if (m && VERS[m[1]]) { S.v = m[1]; S.ref = m[2] === '0' ? '' : (m[2] || ''); }
   S.ref = perc().ref;
   desenha();
@@ -2704,6 +3527,8 @@ function linkId(id, v = ver()) {
   if (!nd) return `<span class="quebrado" title="trecho não encontrado">${esc(id)}?</span>`;
   return `<a class="ref" href="#${v.chave}/${nd.ref || '0'}"><b>${esc(rotRef(nd))}</b> ${esc(nd.t)}</a>`;
 }
+/* o que uma opção exige: ◆ para memória, sem marca para objeto */
+const exige = (lista, v = ver()) => lista.map(x => v.memNomes.has(x) ? '◆ ' + esc(x) : esc(x)).join(' + ');
 const comLinks = s => esc(s).replace(/\[\[(\w+)\]\]/g, (_, id) => linkId(id));
 function quadro(s, v) {
   const m = String(s).match(/^(@\w+|[BDAFMSN]):\s?([\s\S]*)$/);
@@ -2754,11 +3579,13 @@ function desenhaLado() {
   if (v.rotas) h += '<h3>Como chegar a cada final</h3><ul class="lista">' + v.rotas.map(r => `<li><b>${esc(r.f)}</b><small>${comLinks(r.p)}</small></li>`).join('') + '</ul>';
   const mems = {};
   v.lista.forEach(n => (n.mem || []).forEach(m => (mems[m] = mems[m] || { ganha: [], abre: [] }).ganha.push(n)));
-  v.lista.forEach(n => (n.ops || []).forEach(o => { if (o.req) (mems[o.req] = mems[o.req] || { ganha: [], abre: [] }).abre.push(n); }));
+  v.lista.forEach(n => (n.ops || []).forEach(o => MOTOR.lista(o.req).forEach(r => { if (v.memNomes.has(r)) mems[r].abre.push(n); })));
   const nm = Object.keys(mems);
-  if (nm.length) h += '<h3>Memórias e condições</h3><ul class="lista">' + nm.map(m => `<li><b>◆ ${esc(m)}</b><small>${esc((v.memorias || {})[m] || '')}</small>
+  if (nm.length) h += '<h3>Memórias e condições</h3><ul class="lista">' + nm.map(m => `<li><b>◆ ${esc(m)}</b><small>${comLinks((v.memorias || {})[m] || '')}</small>
     <small>ganha em: ${mems[m].ganha.map(n => linkId(n.id)).join(' · ') || '—'}</small><small>abre em: ${mems[m].abre.map(n => linkId(n.id)).join(' · ') || '—'}</small></li>`).join('') + '</ul>';
+  if (v.objetos) h += '<h3>Objetos (só no ciclo)</h3><ul class="lista">' + Object.keys(v.objetos).map(o => `<li><b>${esc(o)}</b><small>${comLinks(v.objetos[o])}</small></li>`).join('') + '</ul>';
   if (v.criaturas) h += '<h3>Criaturas e personagens</h3><ul class="lista">' + v.criaturas.map(c => `<li><b>${esc(c.nome)}</b><small>${comLinks(c.d)}</small></li>`).join('') + '</ul>';
+  if (v.jogo) h += '<h3>No jogo 3D</h3><ul class="lista">' + v.jogo.map(p => `<li><small>${comLinks(p)}</small></li>`).join('') + '</ul>';
   h += `<h3>Legenda</h3><ul class="legenda"><li><span class="k k-des">desenhado</span> do quadrinho original</li><li><span class="k k-jogo">no jogo</span> já existe no 3D</li><li><span class="k k-rev">revisado</span> existe no jogo, alterado aqui</li><li><span class="k k-novo">novo</span> proposta</li>
     <li>☠ morte (recomeço) · ↺ recomeço sem morte · ★ final · ◆ memória · ↪ volta a outro trecho</li></ul>`;
   box.innerHTML = h;
@@ -2801,13 +3628,14 @@ function desenhaNo() {
   const conv = Object.keys(E.conversas).filter(id => v.porId[id]);
   h += `<details class="estado"><summary>O que ela carrega e lembra</summary><ul>
     <li><b>Ciclo:</b> ${ROMANO(E.ciclo)}</li>
-    <li><b>Objetos deste ciclo:</b> ${[...(MOTOR.viu(E, 'buraco') ? ['lanterna'] : []), ...(MOTOR.viu(E, 'chave') ? ['chave'] : []), ...E.obj].map(esc).join(', ') || '—'}</li>
+    <li><b>Objetos deste ciclo:</b> ${[...(MOTOR.viu(E, 'buraco') && !(v.porId.buraco || {}).obj ? ['lanterna'] : []), ...(MOTOR.viu(E, 'chave') && !(v.porId.chave || {}).obj ? ['chave'] : []), ...E.obj].map(esc).join(', ') || '—'}</li>
     <li><b>Memórias:</b> ${[...E.mem].map(m => '◆ ' + esc(m)).join(', ') || '—'}</li>
     <li><b>Conversas deste ciclo:</b> ${conv.map(id => esc(v.porId[id].t)).join(' · ') || '—'}</li></ul></details>`;
   if (S.editar && v.editavel) { $('#leitura').innerHTML = h + editor(nd); ligaEditor(nd); return; }
   h += '<ol class="quadros">' + MOTOR.cena(c, E).map(s => quadro(s, v)).join('') + '</ol>';
   if (c.mem && c.mem.length) h += `<p class="ganho">◆ Memória que atravessa o ciclo: <b>${c.mem.map(esc).join(', ')}</b></p>`;
   if (c.obj && c.obj.length) h += `<p class="ganho obj">Leva consigo: <b>${c.obj.map(esc).join(', ')}</b></p>`;
+  if (c.gasta && c.gasta.length) h += `<p class="ganho obj">Deixa aqui: <b>${c.gasta.map(esc).join(', ')}</b></p>`;
   if (c.fim) h += `<div class="fim f-${c.fim.t}"><span>${FIM[c.fim.t][1]} ${FIM[c.fim.t][0]}</span><b>${esc(c.fim.n || '')}</b><p>${esc(c.fim.d || '')}</p>
     ${c.fim.t !== 'final' ? `<a class="botao" href="#${v.chave}/${P.ref}~">Começar o Ciclo ${ROMANO(E.ciclo + 1)} →</a> <a class="botao" href="#${v.chave}/0">Recomeçar do zero</a>` : `<a class="botao" href="#${v.chave}/0">Recomeçar do zero</a>`}</div>`;
   const ss = MOTOR.saidas(c), cond = c => c.split(',').map(x => x.trim()).map(x => x[0] === '!' ? `ainda não passou por “${(v.porId[x.slice(1)] || {}).t || x.slice(1)}”` : `já passou por “${(v.porId[x] || {}).t || x}”`).join(' e ');
@@ -2823,11 +3651,11 @@ function desenhaNo() {
       const nota = o.c ? `<span class="cond">${esc(o.c)}</span>` : '';
       if (st.motivo === 'vazio') return `<li><span class="opt travada"><span class="num">${esc(num)}</span><span class="lbl">${esc(o.l)}</span>${voto}<span class="dest">caminho ainda não escrito${v.editavel ? ' — ligue Editar para escrever' : ''}</span></span></li>`;
       if (!st.ok) {
-        const pq = st.motivo === 'se' ? 'só se neste ciclo ela ' + esc(cond(o.se)) : { req: `requer ◆ ${esc(o.req)}`, visto: 'já visto neste ciclo', conversado: 'essa conversa já aconteceu neste ciclo' }[st.motivo];
+        const pq = st.motivo === 'se' ? 'só se neste ciclo ela ' + esc(cond(o.se)) : { req: `requer ${exige(st.falta)}`, visto: 'já visto neste ciclo', conversado: 'essa conversa já aconteceu neste ciclo' }[st.motivo];
         const espiar = st.motivo === 'se' || st.motivo === 'req' ? ` <a class="espiar" href="#${v.chave}/${r}">espiar →</a>` : '';
         return `<li><span class="opt fechada"><span class="num">${esc(num)}</span><span class="lbl">${esc(o.l)}</span><span class="dest">${pq}${espiar}</span>${nota}</span></li>`;
       }
-      const req = o.req ? `<span class="cond">◆ ${esc(o.req)}</span>` : '';
+      const req = o.req ? `<span class="cond">${exige(MOTOR.lista(o.req))}</span>` : '';
       const dest = o.n ? `${esc(st.alvo.t)} ${selos(st.alvo)}${st.vez ? ' <span class="k k-volta">de volta</span>' : ''}` : `↪ ${st.vez ? 'de volta a' : 'vai para'} <b>${esc(rotRef(st.alvo))}</b> ${esc(st.alvo.t)}`;
       return `<li><a class="opt${o.go ? ' go' : ''}" href="#${v.chave}/${r}"><span class="num">${esc(num)}</span><span class="lbl">${esc(o.l)}</span>${req}${nota}${voto}<span class="dest">${dest}</span></a></li>`;
     }).join('') + '</ol></section>';
@@ -2957,7 +3785,7 @@ $('#fechar').onclick = () => lado(false);
 const busca = $('#busca'), res = $('#resultados');
 busca.oninput = () => {
   const q = busca.value.trim().toLowerCase(); if (!q) { res.hidden = true; return; }
-  const ref = q.replace(/^v?\d\s*[:·]\s*/, '');
+  const ref = q.replace(/^v?\d+(\.\d)?\s*[:·]\s*/, '');
   const achados = ver().lista.filter(n => n.ref === ref || (n.ref + ' ' + n.t + ' ' + (n.via ? n.via.l : '')).toLowerCase().includes(q)).slice(0, 10);
   res.innerHTML = achados.map(n => `<li><a href="#${ver().chave}/${n.ref || '0'}"><b>${esc(rotRef(n))}</b> ${esc(n.t)}</a></li>`).join('') || '<li><i>nada encontrado</i></li>';
   res.hidden = false;
