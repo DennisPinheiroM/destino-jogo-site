@@ -3652,7 +3652,7 @@ function desenhaNo() {
       const nota = o.c ? `<span class="cond">${esc(o.c)}</span>` : '';
       if (st.motivo === 'vazio') return `<li><span class="opt travada"><span class="num">${esc(num)}</span><span class="lbl">${esc(o.l)}</span>${voto}<span class="dest">caminho ainda não escrito${v.editavel ? ' — ligue Editar para escrever' : ''}</span></span></li>`;
       if (!st.ok) {
-        const pq = st.motivo === 'se' ? 'só se neste ciclo ela ' + esc(cond(o.se)) : { req: `requer ${exige(st.falta)}`, visto: 'já visto neste ciclo', conversado: 'essa conversa já aconteceu neste ciclo' }[st.motivo];
+        const pq = st.motivo === 'se' ? 'só se neste ciclo ela ' + esc(cond(o.se)) : { req: `requer ${exige(st.falta || [])}`, visto: 'já visto neste ciclo', conversado: 'essa conversa já aconteceu neste ciclo' }[st.motivo];
         const espiar = st.motivo === 'se' || st.motivo === 'req' ? ` <a class="espiar" href="#${v.chave}/${r}">espiar →</a>` : '';
         return `<li><span class="opt fechada"><span class="num">${esc(num)}</span><span class="lbl">${esc(o.l)}</span><span class="dest">${pq}${espiar}</span>${nota}</span></li>`;
       }
