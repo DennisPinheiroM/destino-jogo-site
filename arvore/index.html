@@ -157,16 +157,51 @@ a.opt:hover { transform: translateX(3px); box-shadow: -4px 0 0 var(--verm); }
 
 .so-celular { display: none; }
 @media (max-width: 900px) {
+  html, body { font-size: 16px; }
   .so-celular { display: inline-block; }
-  .corpo { grid-template-columns: 1fr; }
-  #lado { display: none; position: fixed; inset: 60px 0 0 0; height: auto; z-index: 4; }
+  .topo { position: static; gap: 8px 10px; padding: 8px 10px; }
+  #menu { font-size: 20px; padding: 4px 12px; min-height: 40px; }
+  .marca { font-size: 22px; }
+  #versoes { order: 3; width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  #versoes::-webkit-scrollbar { display: none; }
+  #versoes button { flex: none; padding: 8px 12px; }
+  .buscar { order: 4; margin-left: 0; width: 100%; }
+  #busca { width: 100%; max-width: none; font-size: 16px; padding: 9px 10px; }
+  #resultados { width: 100%; max-width: none; max-height: 60vh; overflow: auto; z-index: 6; }
+  #resultados a { padding: 10px; }
+  .corpo { grid-template-columns: 1fr; min-height: 0; }
+  #lado { display: none; position: fixed; inset: 0; height: auto; z-index: 7; border: 0; }
+  body.lado-aberto { overflow: hidden; }
   body.lado-aberto #lado { display: block; }
-  .buscar { margin-left: 0; width: 100%; }
-  #busca { width: 100%; max-width: none; }
-  #leitura, .barra { padding-left: 14px; padding-right: 14px; }
-  .cab h1 { font-size: 32px; }
-  .ed-ops li { grid-template-columns: 40px 1fr; }
+  #abas button { flex: 1; padding: 9px; }
+  #abas #fechar { flex: none; font-size: 18px; padding: 6px 14px; }
+  .barra #menu2 { margin-left: auto; }
+  .arvore a, .arvore .folha span { padding: 6px 6px; font-size: 15px; }
+  .arvore summary::before { width: 16px; }
+  .lista li { padding: 10px 0; }
+  .barra { position: sticky; top: 0; z-index: 3; background: var(--fundo); padding: 8px 12px; border-bottom: 1px solid #222; }
+  .barra button { padding: 8px 14px; }
+  #leitura { padding: 4px 12px 80px; }
+  .trilha { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; padding-bottom: 4px; }
+  .trilha a { padding: 4px 8px; }
+  .cab h1 { font-size: 30px; }
+  .quadros li { padding: 10px 12px 10px 34px; }
+  .quadros li::before { left: 9px; }
+  .q-bilhete .fala, .q-datilo .fala, .q-alto .fala { display: block; padding: 10px 12px; }
+  .pergunta { font-size: 26px; }
+  .opt { padding: 12px; gap: 2px 10px; }
+  .opt .num { min-width: 0; font-size: 13px; }
+  .opt .lbl { font-size: 24px; }
+  a.opt:hover { transform: none; box-shadow: none; }
+  a.opt:active { box-shadow: -4px 0 0 var(--verm); }
+  .ed input, .ed select, .ed textarea { font-size: 16px; }
+  .ed .linha { grid-template-columns: 1fr; }
+  .ed fieldset { padding: 6px 8px; margin: 12px 0; }
+  .ed-ops li { grid-template-columns: 34px 1fr; }
   .ed-ops .curto, .acoes { grid-column: 2; }
+  .ed-ops .dest select { max-width: 100%; width: 100%; }
+  .acoes button { padding: 7px 12px; }
+  .ferr button, .copiar button, .ferr .botao { padding: 8px 12px; }
 }
 </style>
 </head>
@@ -179,11 +214,11 @@ a.opt:hover { transform: translateX(3px); box-shadow: -4px 0 0 var(--verm); }
 </header>
 <div class="corpo">
   <aside id="lado">
-    <nav id="abas"><button data-p="resumo">Resumo</button><button data-p="arvore">Árvore</button></nav>
+    <nav id="abas"><button data-p="resumo">Resumo</button><button data-p="arvore">Árvore</button><button id="fechar" class="so-celular" aria-label="fechar o painel">✕</button></nav>
     <div id="painel"></div>
   </aside>
   <main>
-    <div class="barra"><button id="voltar">← voltar</button><button id="editar" class="so-editavel" aria-pressed="false">✎ Editar</button></div>
+    <div class="barra"><button id="voltar">← voltar</button><button id="menu2" class="so-celular">☰ painel</button><button id="editar" class="so-editavel" aria-pressed="false">✎ Editar</button></div>
     <article id="leitura"></article>
   </main>
 </div>
@@ -2518,10 +2553,12 @@ function ligaFerramentas() {
 /* ---------------- busca e controles ---------------- */
 $('#versoes').innerHTML = VERSOES.map(v => `<button data-v="${v.chave}" title="${esc(v.nome)}"><b>V${v.n}</b> ${esc(v.nome)}</button>`).join('') + '<button data-v="m"><b>✎</b> Minha árvore</button>';
 $('#versoes').onclick = e => { const b = e.target.closest('button'); if (b) vaiPara(b.dataset.v, ''); };
-$('#abas').onclick = e => { const b = e.target.closest('button'); if (b) { S.painel = b.dataset.p; desenhaLado(); } };
+$('#abas').onclick = e => { const b = e.target.closest('button'); if (b && b.dataset.p) { S.painel = b.dataset.p; desenhaLado(); } };
 $('#editar').onclick = () => { S.editar = !S.editar; $('#editar').setAttribute('aria-pressed', S.editar); desenha(); };
 $('#voltar').onclick = () => history.back();
-$('#menu').onclick = () => document.body.classList.toggle('lado-aberto');
+const lado = aberto => document.body.classList.toggle('lado-aberto', aberto);
+$('#menu').onclick = $('#menu2').onclick = () => lado(true);
+$('#fechar').onclick = () => lado(false);
 const busca = $('#busca'), res = $('#resultados');
 busca.oninput = () => {
   const q = busca.value.trim().toLowerCase(); if (!q) { res.hidden = true; return; }
@@ -2531,7 +2568,7 @@ busca.oninput = () => {
   res.hidden = false;
 };
 busca.onkeydown = e => { if (e.key === 'Enter') { const a = res.querySelector('a'); if (a) { location.hash = a.getAttribute('href'); busca.value = ''; res.hidden = true; } } };
-document.addEventListener('click', e => { if (!e.target.closest('.buscar')) res.hidden = true; if (e.target.closest('#painel a') && innerWidth < 900) document.body.classList.remove('lado-aberto'); });
+document.addEventListener('click', e => { if (!e.target.closest('.buscar')) res.hidden = true; if (e.target.closest('#painel a') && innerWidth <= 900) lado(false); });
 addEventListener('hashchange', leHash);
 leHash();
 </script>
