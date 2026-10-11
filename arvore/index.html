@@ -238,6 +238,11 @@ a.opt:hover { transform: translateX(3px); box-shadow: -4px 0 0 var(--verm); }
      F: fala vermelha · M: máquina de escrever · S: som desenhado
      N: nota de design · @voz: canal próprio da versão (ver "vozes")
    Em bilhetes e falas, " / " quebra a linha.
+
+   Regra das voltas: dentro de um mesmo ciclo nenhum trecho se repete.
+   Quem volta a um lugar encontra um trecho de volta (o lugar mudou, e
+   só restam as escolhas que ainda fazem sentido com o que ela carrega)
+   ou o ciclo se fecha. Um "go" nunca aponta para trás no caminho.
    ============================================================ */
 'use strict';
 const VERSOES = [];
@@ -257,6 +262,10 @@ const escolhaSerAlto = () => [
   { l: 'Passar correndo', go: 'passar' },
   { l: 'Dar meia volta', go: 'meiaVolta' },
 ];
+/* o corredor branco depois da Esquerda: só resta a Direita */
+const voltaEsquerda = cena => ({ id: 'voltaEsquerda', t: 'O corredor branco, de volta', k: 'novo', cena, q: '?', ops: [
+  { l: 'Direita', go: 'direita' },
+] });
 const escolhaToca = () => [
   { l: 'Quem é você?', go: 'quem' },
   { l: 'Onde eu estou?', go: 'onde' },
@@ -283,6 +292,36 @@ function tronco(V) {
     'O sono vem antes de quem bate.',
   ], fim: { t: 'recomeco', n: 'O sono', d: 'Acorda no corredor, sem susto. Novo ciclo.' } });
 
+  /* trechos de volta: entram na árvore na primeira opção que aponta para eles */
+  const elevadorDeVolta = no('elevadorDeVolta', { t: 'A cabine, de volta', k: 'novo', cena: [
+    'A grade bate. A cabine desce sozinha até a antessala.',
+    'O botão de cima afundou e não volta mais. Os outros dois esperam.',
+  ], q: '?', ops: [
+    { l: 'Botão do meio', go: 'meio' },
+    { l: 'Botão de baixo', go: 'baixo' },
+  ] });
+  const elevadorUltimo = no('elevadorUltimo', { t: 'A cabine, pela última vez', k: 'novo', cena: [
+    'A grade se fecha antes que ela encoste.',
+    'O botão de cima e o do meio apagam sozinhos.',
+    'Só o de baixo continua aceso, com a marca do dedo vermelho.',
+  ], q: '?', ops: [
+    { l: 'Botão de baixo', go: 'baixo' },
+    { l: 'Não apertar', n: no('cabineParada', { t: 'A cabine parada', k: 'novo', cena: [
+      'Ela senta no chão da cabine.',
+      'Nada se mexe. A lâmpada do teto fica amarela, depois laranja.',
+      'S: Toc Toc',
+      'Alguém bate na grade, por fora, com a ponta dos dedos.',
+      'Ela não abre os olhos para ver quem é. O sono vem primeiro.',
+    ], fim: { t: 'recomeco', n: 'A cabine parada', d: 'Recomeço sem susto.' } }) },
+  ] });
+  const salaDeVolta = no('salaDeVolta', { t: 'A sala branca, de volta', k: 'novo', cena: [
+    'A luz do "?" a devolve à sala branca.',
+    'O buraco CHAVE está vazio. Do bilhete da regra sobrou só o furo do prego.',
+    'O "?" continua aceso por dentro, como se esperasse a mão dela.',
+  ], q: '?', ops: [
+    { l: '?', go: 'buraco' },
+  ] });
+
   const elevador = no('elevador', { t: 'A porta nova: o elevador', k: 'jogo', cena: [
     'A chave serve. Uma antessala.',
     'Um elevador de grade.',
@@ -293,8 +332,9 @@ function tronco(V) {
       'Na máquina de escrever, um papel.',
       'D: VOCÊ NÃO DEVIA / TER SUBIDO / SEM LUZ.',
       'As luzes apagam, uma a uma, até a cabine.',
-      'Ela corre. A grade bate.',
-    ], go: 'elevador' }) },
+    ], q: '?', ops: [
+      { l: 'Correr para a cabine', go: 'elevadorDeVolta' },
+    ] }) },
     { l: 'Botão do meio', p: 28, n: V.meio || no('meio', { t: 'Botão do meio: o quarto', k: 'jogo', cena: [
       'O quarto de alguém. A cama ainda tem a forma de quem dormia. Um copo d\'água. Um relógio parado.',
       'No travesseiro:',
@@ -302,7 +342,7 @@ function tronco(V) {
       'S: Toc Toc',
     ], q: '?', ops: [
       { l: 'Deitar na cama', p: 45, n: deitar },
-      { l: 'Voltar ao elevador', p: 55, go: 'elevador' },
+      { l: 'Voltar ao elevador', p: 55, go: 'elevadorUltimo' },
     ] }) },
     { l: 'Botão de baixo', p: 38, n: V.baixo || no('baixo', { t: 'Botão de baixo: o andar inundado', k: 'jogo', cena: [
       'Andar inundado. Velas vermelhas boiando. Um vulto de costas.',
@@ -331,8 +371,9 @@ function tronco(V) {
       'O espelho cede.',
       'O avesso da parede dos buracos. O braço de garras espera junto ao "?".',
       'Ele recua.',
-      'A luz do "?" a devolve à sala branca.',
-    ], go: 'abrir1' }) },
+    ], q: '?', ops: [
+      { l: 'Seguir a luz do "?"', go: 'salaDeVolta' },
+    ] }) },
   ] });
 
   const permanecer = no('permanecer', { t: 'Permanecer no cômodo: as duas portas', k: 'jogo', cena: [
@@ -514,7 +555,8 @@ function tronco(V) {
     { l: 'Entrar na porta', p: 30, n: no('portaTrancada', { t: 'A porta comum', k: 'jogo', cena: [
       'A maçaneta trava.',
       'M: Porta trancada.',
-    ], go: 'direita' }) },
+      'Só resta seguir o vermelho.',
+    ], go: 'vermelho' }) },
     { l: 'Seguir o vermelho', p: 70, n: vermelho },
   ] });
 
@@ -527,13 +569,15 @@ function tronco(V) {
     { l: 'Direita', p: 60, n: direita },
   ] });
 
-  /* se a versão reescreveu o quarto e só aponta para "deitar", o trecho do jogo entra ali */
-  const ids = new Set(), pend = [];
-  (function walk(nd) {
-    if (!nd || ids.has(nd.id)) return; if (nd.id) ids.add(nd.id);
-    (nd.ops || []).forEach(o => { if (o.n) walk(o.n); else if (o.go === 'deitar') pend.push(o); });
-  })(raiz);
-  if (!ids.has('deitar') && pend.length) { delete pend[0].go; pend[0].n = deitar; }
+  /* trechos soltos (deitar, as voltas): entram na primeira opção que aponta para eles */
+  [deitar, elevadorDeVolta, elevadorUltimo, salaDeVolta].forEach(solto => {
+    const ids = new Set(); let pend = null;
+    (function walk(nd) {
+      if (!nd || ids.has(nd.id)) return; if (nd.id) ids.add(nd.id);
+      (nd.ops || []).forEach(o => { if (o.n) walk(o.n); else if (o.go === solto.id && !pend) pend = o; });
+    })(raiz);
+    if (!ids.has(solto.id) && pend) { delete pend.go; pend.n = solto; }
+  });
   return raiz;
 }
 
@@ -570,7 +614,15 @@ function tronco(V) {
               'As folhas a cobrem como um lençol. Um fio vermelho dá a volta, uma vez, duas.',
               'No arquivo, no andar de cima, há um pacote novo. Com etiqueta.',
             ], fim: { t: 'final', n: 'Encadernada', d: 'Final ruim. Ela vira um pacote no arquivo. Não há recomeço.' } } },
-          { l: 'Voltar pela luz do "?"', go: 'abrir1' },
+          { l: 'Voltar pela luz do "?"', n: {
+            id: 'salaFechada', t: 'A sala fechada', k: 'novo', cena: [
+              'A luz do "?" a devolve à sala branca. O buraco se fecha atrás dela, rebocado, com a massa ainda úmida.',
+              'O outro buraco também. A porta cinza não tem mais maçaneta.',
+              'Onde estava o bilhete da regra, uma folha datilografada, ainda morna:',
+              'D: ELA VOLTA À SALA. / ELA ESPERA.',
+              'Ela espera. Do outro lado da parede, a máquina recomeça.',
+              'M: Ela dorme.',
+            ], fim: { t: 'recomeco', n: 'Rascunho', d: 'Recomeço sem susto: o Datilógrafo vira a página. Ela leva a memória O rascunho.' } } },
         ] } },
       { l: 'Tirar o papel da máquina', n: {
         id: 'emBranco', t: 'Em branco', k: 'novo', cena: [
@@ -613,7 +665,7 @@ function tronco(V) {
     },
     rotas: [
       { f: 'Ponto final', p: 'Ciclo A: [[esquerda]] → Estender o braço ([[fio]]) → … → Chave → porta nova → botão de cima → [[seguirFio]] (ou morrer em [[asCegas]]). Depois [[deitar]] para recomeçar. Ciclo B: [[esquerda]] → Ir até a porta → [[pontoFinal]].' },
-      { f: 'O primeiro bilhete', p: 'Num só ciclo: ? → [[ignorar]] → Escrever um bilhete ([[aLetra]]) → Ficar no quarto ([[ficar]]) → Apagar a lanterna → Entrar no buraco → [[datilografo]] → [[primeiroBilhete]]. Também dá para chegar pelos espelhos: [[espelhoPortal]].' },
+      { f: 'O primeiro bilhete', p: 'Num só ciclo: ? → [[ignorar]] → Escrever um bilhete ([[aLetra]]) → Ficar no quarto ([[ficar]]) → Apagar a lanterna → Entrar no buraco → [[datilografo]] → [[primeiroBilhete]]. Também dá para chegar ao Datilógrafo pelos espelhos ([[espelhoPortal]]) ou passando pelo ser alto sem olhar ([[passar]]).' },
       { f: 'A Vela', p: '… → Ligar a lanterna → [[meiaVolta]] → [[aVela]].' },
       { f: 'Encadernada', p: '[[datilografo]] → [[rascunhos]] → [[encadernada]].' },
     ],
@@ -668,9 +720,13 @@ function tronco(V) {
                   'Atrás dela, o corredor começa a se desfazer em folhas.',
                   'M: Fim.',
                 ], fim: { t: 'final', n: 'Ponto final', d: 'A fuga. Ela sai, e as folhas caem como neve. Fica a dúvida: o Datilógrafo deixou, ou só escreveu depois?' } } },
-              { l: 'Voltar', go: 'inicio' },
+              { l: 'Voltar', n: voltaEsquerda([
+                'Ela volta. As folhas em branco vêm atrás dela, arrastadas, até a lâmpada.',
+                'A costura não para.',
+                'O pingo de tinta no chão virou um rastro. Para a direita.',
+              ]) },
             ] } },
-          { l: 'Voltar', go: 'inicio' },
+          { l: 'Voltar', go: 'voltaEsquerda' },
         ],
       },
 
@@ -820,9 +876,11 @@ function tronco(V) {
               'Do outro lado, alguém prende a respiração.',
               'Ninguém abre. Ninguém responde.',
               'Ela reconhece a batida. É a que ela ouviu lá de dentro.',
-              'A porta se abre sozinha. A sala branca. Os dois buracos abertos de novo. Ninguém.',
-              'N: volta à sala branca com a lanterna; o bilhete da regra está no lugar. Deixa a pergunta: quem bateu, da outra vez?',
-            ], go: 'abrir1' } },
+              'A porta se abre sozinha. A sala branca está vazia: os dois buracos foram rebocados, a massa ainda úmida.',
+              'No chão, no lugar onde ela estava quando ouviu a batida, uma folha datilografada:',
+              'D: ELA BATE / NA PRÓPRIA / PORTA.',
+              'A lâmpada apaga. Lá fora, alguém bate de novo, do jeito dela.',
+            ], fim: { t: 'recomeco', n: 'A própria batida', d: 'Recomeço sem susto. Deixa a pergunta: era ela quem batia, da outra vez?' } } },
           { l: 'Esperar', n: {
             t: 'Espera', k: 'novo', bat: '15% → 0%', cena: [
               'Ela senta encostada na porta. A lanterna desce: 15, 14, 13.',
@@ -925,9 +983,22 @@ function tronco(V) {
           'A: SÓ UMA VEZ',
           'Ela não olha.',
           'Os papéis param. Atrás dela, algo enorme fica muito quieto.',
-          'A trilha acaba. Adiante, a luz branca.',
-          'N: obedecer à Regra nº 1 salva. Segue para a clareira do candeeiro.',
-        ], go: 'luz',
+          'A trilha acaba numa parede de madeira crua, no meio das árvores, com papel colado por trás: o avesso de uma sala.',
+          'Um buraco "?", aceso por dentro.',
+          'O braço de garras sai, aponta para dentro e recua.',
+          'D: Ninguém passa / sem olhar. / Venha.',
+          'N: obedecer à Regra nº 1 abre o caminho até o Datilógrafo.',
+        ], q: '?', ops: [
+          { l: 'Entrar no buraco', go: 'datilografo' },
+          { l: 'Ficar do lado de fora', n: {
+            t: 'Do lado de fora', k: 'novo', bat: '14% → 0%', cena: [
+              'Ela senta encostada na parede. A lanterna desce: 13, 12, 11.',
+              'Do outro lado da madeira, uma máquina de escrever bate devagar, como quem espera.',
+              'M: Ela não entra.',
+              'M: Ela fica com frio.',
+              'Ela fica com frio.',
+            ], fim: { t: 'recomeco', n: 'Do lado de fora', d: 'Recomeço sem susto. Ela ouviu, pela primeira vez, a máquina escrever o que ela sente.' } } },
+        ],
       },
 
       meiaVolta: {
@@ -970,7 +1041,7 @@ function tronco(V) {
           'O braço de garras espera junto ao "?". Ele a vê e recua.',
           'Mas não volta para a parede: recua por um corredor estreito, entre o avesso de todas as salas.',
         ], q: '?', ops: [
-          { l: 'Voltar pela luz do "?"', n: { t: 'A luz do "?"', k: 'jogo', cena: ['A luz do "?" a devolve à sala branca.'], go: 'abrir1' } },
+          { l: 'Seguir a luz do "?"', go: 'salaDeVolta' },
           { l: 'Seguir o braço', n: datilografo },
         ],
       },
@@ -983,8 +1054,8 @@ function tronco(V) {
           'D: VOCÊ NÃO DEVIA / TER SUBIDO / SEM LUZ.',
           'As luzes começam a apagar, uma a uma, do fundo para a cabine.',
         ], q: '?', ops: [
-          { l: 'Correr para a cabine', n: { t: 'A grade', k: 'jogo', cena: ['Ela corre. A grade bate atrás dela.'], go: 'elevador' } },
-          { l: 'Seguir o fio', req: 'O fio vermelho (neste ciclo)', n: {
+          { l: 'Correr para a cabine', go: 'elevadorDeVolta' },
+          { l: 'Seguir o fio', req: 'O fio vermelho (só neste ciclo)', n: {
             id: 'seguirFio', t: 'O fio puxa', k: 'novo', cena: [
               'No escuro total, o fio vermelho da manga se estica.',
               'Puxa para o lado, entre duas estantes.',
@@ -994,7 +1065,7 @@ function tronco(V) {
               'Ela repete o nome baixinho, três vezes, para não esquecer.',
               'O fio puxa de volta até a grade. A cabine.',
               'M: Ela encontrou o próprio nome.',
-            ], mem: ['Seu nome'], go: 'elevador' } },
+            ], mem: ['Seu nome'], go: 'elevadorDeVolta' } },
           { l: 'Procurar no escuro', n: {
             id: 'asCegas', t: 'Às cegas', k: 'novo', cena: [
               'Ela tateia os pacotes. As etiquetas são ásperas, escritas com força.',
@@ -1137,7 +1208,11 @@ function tronco(V) {
               '@conta: MIL E OITOCENTOS / E TRÊS.',
               'O sono vem como um cobertor pesado.',
             ], fim: { t: 'recomeco', n: 'Contada no corredor', d: 'Recomeço sem morte: quem é contado dorme.' } } },
-          { l: 'Voltar', go: 'inicio' },
+          { l: 'Voltar', n: voltaEsquerda([
+            'Ela volta, devagar, sem fazer barulho.',
+            '@conta: MIL E OITOCENTOS / E QUATRO.',
+            'Quando ela chega à lâmpada, o papel de parede com flores acaba numa linha reta, como se alguém tivesse parado de sonhar ali.',
+          ]) },
         ],
       },
 
@@ -1335,8 +1410,9 @@ function tronco(V) {
           'Ela não olha.',
           'A: ENTÃO / NÃO VÁ / PARA A LUZ',
           'A: SE ELA ACORDAR / VOCÊ VAI JUNTO / PARA LUGAR / NENHUM',
-          'Ela corre. Adiante, a fenda de luz no céu.',
-        ], go: 'luz',
+          'Ela corre. Adiante, a fenda de luz no céu, baixa e comprida.',
+          'As árvores vão ficando finas como desenho a lápis, até não serem mais árvores.',
+        ], go: 'dormitorio',
       },
 
       meiaVolta: {
@@ -1391,8 +1467,9 @@ function tronco(V) {
               'Passos descalços no chão de madeira. Passam por ela.',
               'Um peso se senta na beira de alguma coisa, como numa cama.',
               'Quando ela abre os olhos, todos os espelhos estão cobertos. Um deles respira por baixo do lençol.',
-              'A porta atrás dela está aberta. O corredor vermelho, as duas portas.',
-            ], go: 'permanecer' } },
+              'Ela sai de costas. A porta dos espelhos se fecha sozinha, e a chave gira do lado de dentro.',
+              'No corredor vermelho, resta a porta nova.',
+            ], go: 'elevador' } },
         ],
       },
 
@@ -1405,7 +1482,7 @@ function tronco(V) {
           'S: Toc Toc',
         ], q: '?', ops: [
           { l: 'Deitar na cama', go: 'deitar' },
-          { l: 'Voltar ao elevador', go: 'elevador' },
+          { l: 'Voltar ao elevador', go: 'elevadorUltimo' },
           { l: 'Dar corda no relógio', req: 'A corda', n: {
             id: 'relogio', t: 'A corda', k: 'novo', cena: [
               'A chave do fio vermelho entra no relógio como se tivesse sido feita para ele.',
@@ -1515,11 +1592,13 @@ function tronco(V) {
           'Ela fica. Veste a capa. As mãos ficam vermelhas até os pulsos.',
           'Ciclos depois, alguém acorda num corredor branco e vê na parede uma seta vermelha para cada lado.',
         ], fim: { t: 'final', n: 'A Pintora', d: 'Ela fica para guiar quem chega. As setas do começo agora são dela.' } } },
-      { l: 'Voltar ao corredor', n: {
-        t: 'De volta', k: 'novo', cena: [
-          'Ela sai de joelhos pela portinha.',
-          'Atrás dela, a tranca corre três vezes.',
-        ], go: 'direita' } },
+      { l: 'Ainda não', n: {
+        id: 'aindaNao', t: 'Ainda não', k: 'novo', cena: [
+          'Ela senta com eles, de costas para os canos.',
+          'Alguém põe a manivela na mão dela. Ela gira. As lanternas penduradas acendem um pouco, em fila.',
+          'Ninguém pergunta nada. A lâmpada vermelha zumbe.',
+          'Ela dorme sentada, como eles.',
+        ], fim: { t: 'recomeco', n: 'Ainda não', d: 'Recomeço sem susto. Ela sabe onde fica a porta preta.' } } },
     ],
   };
 
@@ -1530,8 +1609,33 @@ function tronco(V) {
       'A lanterna dessa etiqueta ainda está morna.',
       '@luz: ESSA / EU NÃO / CONSEGUI / TROCAR.',
       '@luz: ELA ENTROU / NO ESCURO / SEM NADA.',
-    ], mem: ['O traço'], go: 'luz',
+    ], mem: ['O traço'], q: '?', ops: [
+      { l: 'Trocar a lanterna', go: 'cemPorCento' },
+      { l: 'Apagar a lanterna', go: 'apagados' },
+      { l: 'Seguir as setas com gancho', n: null },
+    ],
   };
+
+  /* as setas da Pintora levam à portinha pelo lado de fora: não se volta ao começo */
+  const setasGancho = {
+    id: 'setasGancho', t: 'As setas com gancho', k: 'novo', cena: [
+      'Nos troncos, setas pequenas com gancho no fim. Uma a cada dez passos.',
+      'Elas levam a uma porta encostada numa árvore, sem parede em volta.',
+      'Do outro lado não há corredor branco: há um poço de escada, frio, cheio de canos.',
+      'No fim da escada, a portinha de ferro na altura do joelho, vista por trás. As mesmas marcas de muitas batidas.',
+    ], q: '?', ops: [
+      { l: 'Bater três vezes', go: 'casaMaquinas' },
+      { l: 'Bater duas vezes', n: {
+        t: 'Duas batidas, por dentro', k: 'novo', cena: [
+          'S: Toc Toc',
+          'Do outro lado, alguém derruba uma lanterna.',
+          'Silêncio. Depois a tranca corre, uma, duas, três vezes, e não abre mais.',
+          'Lá em cima, no alto da escada, a porta da floresta range.',
+          'Algo muito alto se dobra para descer.',
+        ], fim: { t: 'morte', n: 'Duas batidas', d: 'Recomeço. Ensina: a senha não serve só para entrar; serve para não ser confundida com ele.' } } },
+    ],
+  };
+  farolExtra.ops[2].n = setasGancho;
 
   VERSOES.push({
     n: 3, nome: 'Os Que Ficaram',
@@ -1549,7 +1653,7 @@ function tronco(V) {
       'O traço': 'Ela sabe reconhecer a letra verdadeira da Pintora (o gancho no fim do traço). Permite ficar e pintar no lugar dela, e desconfiar de bilhetes falsos.',
     },
     rotas: [
-      { f: 'Manhã', p: 'Ciclo A: ? → [[ignorar]] (memória A senha), ou → Ligar a lanterna → [[meiaVolta]] → Dar a lanterna. Ciclo B: [[esquerda]] → Bater três vezes → [[casaMaquinas]] → [[saidaEscura]] → [[manha]]. Num ciclo só: ? → Abrir a porta → [[ficar]] → Abrir (ouve as três batidas) → Seguir a mulher → [[esquerda]] → Bater três vezes.' },
+      { f: 'Manhã', p: 'Ciclo A: ? → [[ignorar]] (memória A senha), ou → Ligar a lanterna → [[meiaVolta]] → Dar a lanterna. Ciclo B: [[esquerda]] → Bater três vezes → [[casaMaquinas]] → [[saidaEscura]] → [[manha]]. Num ciclo só: ? → Abrir a porta → [[ficar]] → Abrir (ouve as três batidas) → Seguir a mulher → [[setasGancho]] → Bater três vezes. As setas com gancho também aparecem no Faroleiro.' },
       { f: 'A Pintora', p: 'Como em Manhã, mas com a memória O traço (de [[ficar]], [[voltar]] ou das etiquetas do Faroleiro) → [[saidaEscura]] → [[pintora]].' },
       { f: 'Cem por cento', p: 'Ir em direção à luz → [[luz]] → Trocar a lanterna → [[cemPorCento]].' },
       { f: 'Zero', p: '[[luz]] → Apagar a lanterna → [[apagados]] → Segurar a mão → [[zero]].' },
@@ -1594,10 +1698,14 @@ function tronco(V) {
                 ].concat(REVELA), q: '?', ops: [
                   { l: 'Sair no escuro', go: 'manha' },
                   { l: 'Ficar e pintar', req: 'O traço', go: 'pintora' },
-                  { l: 'Voltar ao corredor', go: 'direita' },
+                  { l: 'Ainda não', go: 'aindaNao' },
                 ] } },
             ] } },
-          { l: 'Voltar', go: 'inicio' },
+          { l: 'Voltar', n: voltaEsquerda([
+            'Ela volta. As setas raspadas ficam para trás.',
+            'Na parede do corredor branco, a seta vermelha da direita está mais forte do que antes, como se tivesse sido repintada agora.',
+            'A tinta ainda escorre.',
+          ]) },
         ],
       },
 
@@ -1639,12 +1747,10 @@ function tronco(V) {
               'E vai embora entre as árvores, para longe da trilha.',
             ], mem: ['O traço'], obj: ['As três batidas (ouvidas neste ciclo)'], q: '?', ops: [
               { l: 'Seguir a mulher', n: {
-                t: 'As setas com gancho', k: 'novo', bat: '19%', cena: [
+                t: 'Atrás da mulher', k: 'novo', bat: '19%', cena: [
                   'Ela some entre as árvores mais rápido do que deveria.',
-                  'Nos troncos, setas pequenas com gancho no fim. Uma a cada dez passos.',
-                  'Elas levam a uma porta encostada numa árvore, sem parede em volta.',
-                  'Do outro lado, o corredor branco. Pelo lado esquerdo.',
-                ], go: 'esquerda' } },
+                  'Fica o cheiro de tinta, e as setas.',
+                ], go: 'setasGancho' } },
               { l: 'Seguir em frente', go: 'frente' },
             ] } },
           { l: 'Não abrir', n: {
@@ -1661,13 +1767,12 @@ function tronco(V) {
       },
 
       luz: {
-        t: 'Ir em direção à luz: o Faroleiro', k: 'novo', bat: '18%', cena: [
+        t: 'Ir em direção à luz: o Faroleiro', k: 'novo', cena: [
           'Ela sai da trilha. A luz branca gira, devagar, varrendo as árvores.',
           'Uma clareira. Lanternas penduradas nos galhos como frutas, centenas, apagadas. Cada uma com uma etiqueta.',
           'No meio, numa cadeira de madeira, um homem velho e magro. No lugar da cabeça, um farol de vidro grosso que gira.',
           'Quando a luz passa por ela, palavras aparecem no ar, brancas:',
           '@luz: TÃO / POUCA.',
-          '@luz: DEZOITO / POR CENTO.',
           '@luz: EU TROCO.',
         ], q: '?', ops: [
           { l: 'Trocar a lanterna', n: {
@@ -1697,15 +1802,14 @@ function tronco(V) {
                   'Ela não sente falta de nada. Não sabe mais o que seria sentir falta.',
                   'A fila passa pelo corredor branco, pela sala branca, pela floresta, sem nunca abrir uma porta.',
                 ], fim: { t: 'final', n: 'Zero', d: 'Paz sombria. Ela vira uma Apagada. Responde ao que acontece com a bateria em 0%.' } } },
-              { l: 'Soltar e voltar', n: {
-                t: 'Sozinha', k: 'novo', bat: '17%', cena: [
+              { l: 'Soltar a mão', n: {
+                t: 'Sozinha', k: 'novo', cena: [
                   'Ela solta. A fila some.',
-                  'Ela acende a lanterna de novo. As etiquetas balançam nos galhos.',
-                  'À esquerda, entre os troncos, a fita vermelha.',
-                ], go: 'trilha' } },
+                  'Ela acende a lanterna de novo. A cadeira do Faroleiro está vazia. As etiquetas balançam nos galhos.',
+                  'Num tronco, na altura dos olhos, uma seta pequena com gancho no fim.',
+                ], go: 'setasGancho' } },
             ] } },
           { l: 'Ler as etiquetas', n: farolExtra },
-          { l: 'Voltar para a trilha', go: 'trilha' },
         ],
       },
 
@@ -2022,7 +2126,12 @@ function tronco(V) {
                   '@enfermeira: Eu disse que daqui você só olha.',
                 ], fim: { t: 'morte', n: 'Parada', d: 'Recomeço. Ensina: não se volta à força.' } } },
             ] } },
-          { l: 'Voltar', go: 'inicio' },
+          { l: 'Voltar', n: voltaEsquerda([
+            '@enfermeira: Isso. Boa menina.',
+            'O linóleo verde acaba de repente, numa linha reta. Depois dela, o piso do corredor branco.',
+            'O bipe continua atrás dela, mais baixo, e some quando ela passa pela lâmpada.',
+            '@eu: Leito 4… por que leito 4?',
+          ]) },
         ],
       },
 
@@ -2123,7 +2232,8 @@ function tronco(V) {
               'A voz de baixo da terra se cala.',
               'Bem longe, à direita, outra voz, pequena e verdadeira:',
               '@davi: Rua das Acácias! Lia, não vai aí! Vem pra luz!',
-            ], go: 'luz' } },
+              'Ela corre na direção da voz pequena, sem trilha, até as árvores acabarem.',
+            ], go: 'luzGrande' } },
         ],
       },
 
