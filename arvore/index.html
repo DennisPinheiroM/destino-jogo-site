@@ -258,7 +258,8 @@ a.opt:hover { transform: translateX(3px); box-shadow: -4px 0 0 var(--verm); }
      corredor com portas, a cabine do elevador). Pode ser atravessada
      sempre, mesmo igual; as voltas, se houver, valem só até acabarem.
    - Opção com req exige memórias (de qualquer ciclo) ou objetos (deste
-     ciclo); várias separadas por vírgula, todas exigidas.
+     ciclo); várias separadas por vírgula, todas exigidas; !x = ela
+     ainda não tem x.
    - Trecho com gasta: [objetos] tira esses objetos dela (a chave que
      fica na fechadura, o que ela trocou). Opção com se: 'id,!id' exige ter passado (ou não)
      por esses trechos neste ciclo.
@@ -291,7 +292,7 @@ const MOTOR = (() => {
   const lista = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean);
   const tem = (E, x) => E.mem.has(x) || E.obj.has(x);
   /* o que falta para a exigência de uma opção */
-  const falta = (req, E) => lista(req).filter(x => !tem(E, x));
+  const falta = (req, E) => lista(req).filter(x => x[0] === '!' ? tem(E, x.slice(1)) : !tem(E, x));
   /* quadros que valem nesta passagem, sem a marca de condição */
   function cena(c, E) {
     return (c.cena || []).map(s => {
@@ -703,15 +704,15 @@ function tronco(ver) {
   ] });
 
   const olhar = no('olhar', { t: 'Olhar para trás', k: 'jogo', cena: [
-    'O que está atrás dela depende do ciclo.',
-  ], q: '(depende do ciclo)', ops: [
-    { l: 'Ciclo I', c: 'no primeiro ciclo', n: no('parede', { t: 'A parede de bilhetes', k: 'jogo', cena: [
+    'O que está atrás dela depende de ela já ter olhado antes, em qualquer ciclo.',
+  ], q: '(depende da memória)', ops: [
+    { l: 'A primeira vez', req: '!Os bilhetes', n: no('parede', { t: 'A parede de bilhetes', k: 'jogo', mem: ['Os bilhetes'], cena: [
       'Atrás dela, uma parede inteira de bilhetes "NÃO OLHE PARA TRÁS", em dezenas de letras diferentes.',
       'Entre eles, um espaço vazio do tamanho de um bilhete, com uma marca vermelha.',
       'A porta atrás se entreabre sozinha. Luz branca.',
       'N: na sala branca, o bilhete da regra muda: "Desta vez ele não estava lá."',
     ], go: 'abrir1' }) },
-    { l: 'Ciclo II em diante', c: 'do segundo ciclo em diante', n: V.recolhedor || no('recolhedor', { t: 'O Recolhedor', k: 'jogo', cena: [
+    { l: 'Da segunda vez em diante', req: 'Os bilhetes', n: V.recolhedor || no('recolhedor', { t: 'O Recolhedor', k: 'jogo', cena: [
       'A parede está nua.',
       'Pés descalços, cinzentos.',
       'Um corpo curvado, coberto de bilhetes "NÃO OLHE PARA TRÁS", como escamas. Um bilhete colado no lugar do rosto.',
@@ -3528,7 +3529,7 @@ function linkId(id, v = ver()) {
   return `<a class="ref" href="#${v.chave}/${nd.ref || '0'}"><b>${esc(rotRef(nd))}</b> ${esc(nd.t)}</a>`;
 }
 /* o que uma opção exige: ◆ para memória, sem marca para objeto */
-const exige = (lista, v = ver()) => lista.map(x => v.memNomes.has(x) ? '◆ ' + esc(x) : esc(x)).join(' + ');
+const exige = (lista, v = ver()) => lista.map(x => x[0] === '!' ? 'ainda não ter ' + exige([x.slice(1)], v) : v.memNomes.has(x) ? '◆ ' + esc(x) : esc(x)).join(' + ');
 const comLinks = s => esc(s).replace(/\[\[(\w+)\]\]/g, (_, id) => linkId(id));
 function quadro(s, v) {
   const m = String(s).match(/^(@\w+|[BDAFMSN]):\s?([\s\S]*)$/);
@@ -3579,7 +3580,7 @@ function desenhaLado() {
   if (v.rotas) h += '<h3>Como chegar a cada final</h3><ul class="lista">' + v.rotas.map(r => `<li><b>${esc(r.f)}</b><small>${comLinks(r.p)}</small></li>`).join('') + '</ul>';
   const mems = {};
   v.lista.forEach(n => (n.mem || []).forEach(m => (mems[m] = mems[m] || { ganha: [], abre: [] }).ganha.push(n)));
-  v.lista.forEach(n => (n.ops || []).forEach(o => MOTOR.lista(o.req).forEach(r => { if (v.memNomes.has(r)) mems[r].abre.push(n); })));
+  v.lista.forEach(n => (n.ops || []).forEach(o => MOTOR.lista(o.req).forEach(r => { r = r.replace(/^!/, ''); if (v.memNomes.has(r)) mems[r].abre.push(n); })));
   const nm = Object.keys(mems);
   if (nm.length) h += '<h3>Memórias e condições</h3><ul class="lista">' + nm.map(m => `<li><b>◆ ${esc(m)}</b><small>${comLinks((v.memorias || {})[m] || '')}</small>
     <small>ganha em: ${mems[m].ganha.map(n => linkId(n.id)).join(' · ') || '—'}</small><small>abre em: ${mems[m].abre.map(n => linkId(n.id)).join(' · ') || '—'}</small></li>`).join('') + '</ul>';
