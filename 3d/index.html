@@ -90,6 +90,7 @@ body { font-family: var(--font-hand); -webkit-tap-highlight-color: transparent; 
 .opt .strike { position: absolute; left: calc(var(--u) * 8); right: calc(var(--u) * 4); top: 50%; height: calc(var(--u) * 3); width: auto; transform: translateY(-50%); overflow: visible; pointer-events: none; }
 .opt .strike path { fill: none; stroke: var(--graphite-soft); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .opt.nope { animation: nope .4s ease; }
+.opt.used .lbl { text-decoration-style: double; }
 @keyframes nope { 20% { transform: translateX(-6px) rotate(-1deg); } 50% { transform: translateX(5px); } 80% { transform: translateX(-3px); } }
 #choice .foot { margin: calc(var(--u) * 2) 0 0; text-align: right; font-family: var(--font-hand); font-size: calc(var(--u) * 4); color: var(--graphite-soft); filter: url(#graphite); }
 #choice .foot.warn { color: var(--ink-red); }
@@ -2866,7 +2867,7 @@ const STORY = {
 
   /* o buraco CHAVE: a chave, a batida na porta */
   chave: { beats: [
-    { cam: { p: [120.69, 1.56, -2.25], l: [120.7, 1.45, -3], d: 2.4 }, auto: 2600 },
+    { flag: 'chave', cam: { p: [120.69, 1.56, -2.25], l: [120.7, 1.45, -3], d: 2.4 }, auto: 2600 },
     { fx: 'keyOut', sfx: 'knob', auto: 2400 },
     { fx: 'takeKey', type: { t: 'Você possui uma chave.', col: '#111', y: 10 } },
     { cam: [{ p: [120, 1.6, -.1], l: [123, 1.5, -.1], d: 1.5 }, { p: [120, 1.6, .2], l: [120, 1.25, 3], d: 1.5 }], auto: 3200 },
@@ -2918,7 +2919,7 @@ const STORY = {
   ] },
 
   /* continuar olhando: o reflexo apaga, o espelho cede, e do outro lado está o avesso da parede dos buracos */
-  espelhoPortal: { next: 'abrir1', nextAt: 7, beats: [
+  espelhoPortal: { next: 'salaVolta', beats: [
     { fx: 'mirrorDim', sfx: 'tension', cam: { p: [180, 1.6, -1.3], l: [180, 1.5, -2.5], d: 3.2, e: 'sine' }, auto: 3600 },
     { fx: 'mirrorHoles', auto: 2800 },
     { fx: 'mirrorRipple', sfx: 'whoosh', cam: { p: [180, 1.6, -2.4], l: [180, 1.5, -4], d: 2.2, walk: 1 }, veil: { c: '#000', o: 1, d: 1100, delay: 1000 }, auto: 2600 },
@@ -2928,7 +2929,16 @@ const STORY = {
     { fx: 'avessoTurn', sfx: 'tension', cam: { p: [120.45, 1.6, -3.85], d: 2 }, auto: 2600 },
     { fx: 'avessoWithdraw', sfx: 'whoosh', cam: { l: [119.3, 1.5, -3.2], d: 1.6 }, auto: 2400 },
     { fx: 'qGlow', cam: { p: [119.35, 1.55, -3.45], l: [119.3, 1.5, -3.0], d: 2.4, walk: 1 }, veil: { c: '#fff', o: 1, d: 1500, delay: 900 }, auto: 2700 },
-    { fx: 'place', env: 'white', amb: 'room', cam: { p: [120, 1.6, -.3], l: [120, 1.55, -3], cut: 1 }, veil: { o: 0, d: 2600 }, auto: 2400 },
+    { fx: ['place', 'ruleGone'], env: 'white', amb: 'room', cam: { p: [120, 1.6, -.3], l: [120, 1.55, -3], cut: 1 }, veil: { o: 0, d: 2600 }, auto: 2400 },
+  ] },
+
+  /* de volta à sala branca: o que ela já pegou neste ciclo não se oferece de novo.
+     Do bilhete da regra sobrou só o prego; o buraco CHAVE está vazio. */
+  salaVolta: { beats: [
+    { cam: { p: [120, 1.62, -1.7], l: [120, 1.9, -3], d: 2.6 }, auto: 3000 },
+    { cam: { p: [120.62, 1.56, -2.2], l: [120.7, 1.45, -3], d: 2.2 }, auto: 2800 },
+    { cam: { p: [120, 1.6, -1.1], l: [120, 1.62, -3], d: 2.2 },
+      choice: { q: 'ESCOLHA', opts: [['?', 56, 'buraco', 'lanterna'], ['Chave', 44, 'chave', 'chave']] } },
   ] },
 
   /* a porta nova: a chave serve. Uma antessala e um elevador com três botões sem número */
@@ -3020,11 +3030,11 @@ const STORY = {
     { cam: { p: [120.66, 1.62, -2.25], l: [120.74, 1.66, -3], d: 2.4 } },
     { cam: { p: [119.34, 1.62, -2.25], l: [119.28, 1.62, -3], d: 2.2 } },
     { cam: { p: [120, 1.6, -1.1], l: [120, 1.62, -3], d: 2.2 },
-      choice: { q: 'ESCOLHA', opts: [['?', 56, 'buraco'], ['Chave', 44, 'chave']] } },
+      choice: { q: 'ESCOLHA', opts: [['?', 56, 'buraco', 'lanterna'], ['Chave', 44, 'chave', 'chave']] } },
   ] },
 
   buraco: { beats: [
-    { cam: { p: [119.31, 1.56, -2.5], l: [119.3, 1.5, -3], d: 2.6 }, reach: { k: 'hole', delay: 1200 }, auto: 3900 },
+    { flag: 'lanterna', cam: { p: [119.31, 1.56, -2.5], l: [119.3, 1.5, -3], d: 2.6 }, reach: { k: 'hole', delay: 1200 }, auto: 3900 },
     { sfx: 'whoosh', cam: { p: [119.3, 1.5, -2.87], l: [119.3, 1.5, -3.3], d: 1.6 }, veil: { c: '#000', o: 1, d: 1300 }, auto: 2600 },
     { reach: null, veil: { o: 0, d: 1200 }, cam: { p: [119.45, 1.6, -1.9], l: [119.3, 1.45, -3], d: 1.2 }, note: 'desconhecido', sfx: 'paper', hold: true },
     { note: null, fx: 'creepyArm', sfx: 'sting', cam: { p: [119.7, 1.62, -1.5], l: [119.3, 1.35, -3], d: 1.6 }, auto: 4400 },
@@ -3381,6 +3391,7 @@ const FX = {
   wallNotes() { OBJ.wallNotes.visible = OBJ.markNote.visible = true; OBJ.wallBare.visible = false; OBJ.backGlow.intensity = 1.6; },
   wallBare() { OBJ.wallBare.visible = true; OBJ.wallNotes.visible = OBJ.markNote.visible = false; OBJ.backGlow.intensity = 1.6; OBJ.collector.visible = false; },
   doorAjar() { const d = OBJ.darkDoor; tween({ delay: .2, dur: 2.2, ease: 'io', on: k => { d.rotation.y = k * .38; OBJ.darkFlood.intensity = k * .9; } }); },
+  ruleGone() { OBJ.ruleNote.visible = false; },
   ruleAlt() { OBJ.ruleNote.material.map = TEX.ruleAlt; OBJ.ruleNote.material.needsUpdate = true; },
   collectorAppear() { const c = OBJ.collector; c.visible = true; c.position.set(0, 0, .75); c.rotation.set(0, Math.PI, 0); OBJ.collArm.rotation.set(0, 0, 0); }, // já está lá, imóvel
   collectorAttack() {
@@ -3416,7 +3427,7 @@ function resetWorld() {
   OBJ.creepy.visible = false; OBJ.eyes.visible = false; OBJ.monsters.visible = OBJ.crawler.visible = false; OBJ.crawler.position.z = -3.3;
   OBJ.being2.visible = false; OBJ.face.visible = false; OBJ.face.scale.setScalar(1); OBJ.face.material.map = OBJ.faceTex; OBJ.face.material.needsUpdate = true;
   OBJ.wallNotes.visible = OBJ.markNote.visible = OBJ.wallBare.visible = false; OBJ.backGlow.intensity = 0; OBJ.collector.visible = false; OBJ.collector.position.set(0, 0, .75); OBJ.collector.rotation.set(0, Math.PI, 0); OBJ.collArm.rotation.set(0, 0, 0);
-  OBJ.stripLight.intensity = .9; OBJ.strip.visible = true; OBJ.ruleNote.material.map = TEX.rule; OBJ.ruleNote.material.needsUpdate = true;
+  OBJ.stripLight.intensity = .9; OBJ.strip.visible = true; OBJ.ruleNote.material.map = TEX.rule; OBJ.ruleNote.material.needsUpdate = true; OBJ.ruleNote.visible = true;
   OBJ.key.visible = false; OBJ.key.position.set(.7, 1.5, -3.12); OBJ.sideDoor.visible = OBJ.sideDark.visible = false; OBJ.sideDoor.rotation.y = 0; OBJ.newDoor.visible = false; OBJ.oldDoor.position.x = 7.2;
   resetPortas();
   OBJ.paper.visible = false; G.torch = false; G.hudDim = 0; G.shake = 0; torchLight.intensity = 0; CTX.bat = 21; G.hudKey = ''; renderHud();
@@ -3548,14 +3559,18 @@ function printMark(on) {
 const BOX = '<svg viewBox="0 0 40 40" class="box" aria-hidden="true"><path d="M5,7 C14,5 27,6 35,5 C36,15 35,26 36,35 C26,36 15,35 5,36 C4,26 6,16 5,7" /><path class="tick" d="M10,20 L18,29 L33,6" /></svg>';
 function showChoice(c) {
   const opts = c.opts.map((o, k) => {
-    const [label, pct, go] = o, open = !!routeFor(go);
-    return `<li><button type="button" id="opt-${G.node}-${k}" class="opt ${open ? 'open' : 'locked'}" data-k="${k}" ${open ? '' : 'aria-disabled="true"'}
-      aria-label="${label.replace(/<[^>]+>/g, ' ')}${open ? '' : ' — caminho ainda não desenhado'}">
+    /* 4º campo: a opção fecha se ela já fez isso neste ciclo (G.flags) */
+    const [label, pct, go, feito] = o, usada = !!(feito && G.flags && G.flags[feito]), open = !usada && !!routeFor(go);
+    return `<li><button type="button" id="opt-${G.node}-${k}" class="opt ${open ? 'open' : usada ? 'locked used' : 'locked'}" data-k="${k}" ${open ? '' : 'aria-disabled="true"'}
+      aria-label="${label.replace(/<[^>]+>/g, ' ')}${open ? '' : usada ? ' — já escolhido neste ciclo' : ' — caminho ainda não desenhado'}">
       ${BOX}<span class="lbl">${label}</span>
       ${open ? '<svg class="under" viewBox="0 0 200 10" preserveAspectRatio="none" aria-hidden="true"><path d="M2,6 C50,3 120,8 198,4"/></svg>' : ''}
     </button></li>`;
   }).join('');
-  choiceEl.innerHTML = `<div class="q">${c.q}</div><ol>${opts}</ol><p class="foot" aria-live="polite">os outros caminhos ainda não foram desenhados</p>`;
+  const semDesenho = c.opts.some(o => !(o[3] && G.flags && G.flags[o[3]]) && !routeFor(o[2]));
+  const usadas = c.opts.some(o => o[3] && G.flags && G.flags[o[3]]);
+  const foot = semDesenho ? 'os outros caminhos ainda não foram desenhados' : usadas ? 'o que ela já pegou não volta' : '';
+  choiceEl.innerHTML = `<div class="q">${c.q}</div><ol>${opts}</ol><p class="foot" aria-live="polite">${foot}</p>`;
   choiceEl.hidden = false;
   choiceEl.classList.remove('in', 'out'); void choiceEl.offsetWidth; choiceEl.classList.add('in');
   choiceEl.querySelectorAll('.opt').forEach(btn => btn.addEventListener('click', e => { e.stopPropagation(); pick(c, +btn.dataset.k, btn); }));
@@ -3564,10 +3579,10 @@ function showChoice(c) {
 function hideChoice() { choiceEl.hidden = true; choiceEl.innerHTML = ''; choiceEl.classList.remove('in', 'out'); }
 function pick(c, k, btn) {
   if (G.waking || !G.ready || !btn || performance.now() - (G.choiceAt || 0) < 700) return;
-  const o = c.opts[k], dest = routeFor(o[2]);
+  const o = c.opts[k], usada = !!(o[3] && G.flags && G.flags[o[3]]), dest = usada ? null : routeFor(o[2]);
   if (!dest) {
     btn.classList.remove('nope'); void btn.offsetWidth; btn.classList.add('nope');
-    const f = choiceEl.querySelector('.foot'); f.textContent = 'esse caminho ainda não foi desenhado'; f.classList.add('warn');
+    const f = choiceEl.querySelector('.foot'); f.textContent = usada ? 'isso ela já pegou' : 'esse caminho ainda não foi desenhado'; f.classList.add('warn');
     SND.play('paper'); return;
   }
   G.ready = false;

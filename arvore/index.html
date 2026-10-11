@@ -254,6 +254,9 @@ a.opt:hover { transform: translateX(3px); box-shadow: -4px 0 0 var(--verm); }
      conversas); só as memórias atravessam o ciclo. conversa: true só
      marca o trecho como diálogo.
    - A última volta com sempre: true vale para todas as vezes seguintes.
+   - Passagem (passagem: true): caminho intermediário com opções (um
+     corredor com portas, a cabine do elevador). Pode ser atravessada
+     sempre, mesmo igual; as voltas, se houver, valem só até acabarem.
    - Opção com req exige uma memória (de qualquer ciclo) ou um objeto
      (deste ciclo). Opção com se: 'id,!id' exige ter passado (ou não)
      por esses trechos neste ciclo.
@@ -267,7 +270,8 @@ const MOTOR = (() => {
     if (!vez) return nd;
     const vs = voltasDe(nd);
     let v = vs[vez - 1];
-    if (!v && vs.length && vs[vs.length - 1].sempre) v = vs[vs.length - 1];
+    if (!v && vs.length && (vs[vs.length - 1].sempre || nd.passagem)) v = vs[vs.length - 1];
+    if (!v && nd.passagem) return Object.assign({}, nd, { _volta: vez });
     if (!v) return null;
     const c = Object.assign({}, nd, v, { _volta: vez });
     if (v.ops === undefined && v.go !== undefined) delete c.ops;
@@ -364,7 +368,8 @@ if (typeof module !== 'undefined') module.exports = MOTOR;
             req: memória ou objeto exigido, se: 'id,!id' (passou ou não
             por esses trechos neste ciclo), c: condição em texto }
    Voltas: volta: {cena, ops…} ou voltas: [...] = como o trecho fica
-     quando ela passa de novo; conversa: true = conta entre ciclos.
+     quando ela passa de novo; conversa: true = é diálogo; passagem:
+     true = caminho intermediário, pode repetir igual.
      Quadro com {id,!id} na frente só aparece se a condição valer.
      As regras estão em motor.js.
    Quadros: texto simples = o que se vê; prefixos:
@@ -376,6 +381,8 @@ if (typeof module !== 'undefined') module.exports = MOTOR;
    Regra das voltas: voltar a um lugar pode, repetir não pode. O que
    ela já pegou, já perguntou ou já viu não se oferece de novo igual;
    o que mudou continua mudado; diálogo só se repete se destrava algo.
+   Passagens (corredores com portas, a cabine) podem repetir iguais.
+   Num ciclo novo tudo volta a ficar disponível.
    ============================================================ */
 'use strict';
 const VERSOES = [];
@@ -426,28 +433,10 @@ function tronco(V) {
     'O sono vem antes de quem bate.',
   ], fim: { t: 'recomeco', n: 'O sono', d: 'Acorda no corredor, sem susto. Novo ciclo.' } });
 
-  const elevador = no('elevador', { t: 'A porta nova: o elevador', k: 'jogo', cena: [
+  const elevador = no('elevador', { t: 'A porta nova: o elevador', k: 'jogo', passagem: true, cena: [
     'A chave serve. Uma antessala.',
     'Um elevador de grade.',
     'Três botões sem número. O de baixo tem um dedo vermelho.',
-  ], voltas: [
-    { cena: [
-      'A grade se abre. A cabine espera com a luz mais fraca.',
-      '{cima}No botão de cima ficou a marca de um dedo. O dela.',
-      '{meio}O botão do meio está morno, como uma mão que acabou de sair.',
-    ] },
-    { cena: [
-      'A cabine de novo. Agora a lâmpada do teto pisca no ritmo de uma batida.',
-      'Na parede de grade, alguém amarrou um fio vermelho que não estava ali.',
-    ] },
-    { cena: [
-      'A grade nem chega a fechar. A cabine já sabe que ela volta.',
-      'O dedo vermelho do botão de baixo está mais nítido. Escorre um pouco.',
-    ] },
-    { cena: [
-      'A cabine. Só a lâmpada, o fio vermelho e o dedo que escorre.',
-      'M: Ela anda em círculos.',
-    ] },
   ], q: '?', ops: [
     { l: 'Botão de cima', p: 34, n: V.cima || no('cima', { t: 'Botão de cima: o arquivo', k: 'jogo', cena: [
       'Um arquivo: estantes até o escuro, pacotes de papel amarrados com fio vermelho.',
@@ -508,7 +497,7 @@ function tronco(V) {
     ] }) },
   ] });
 
-  const permanecer = no('permanecer', { t: 'Permanecer no cômodo: as duas portas', k: 'jogo', cena: [
+  const permanecer = no('permanecer', { t: 'Permanecer no cômodo: as duas portas', k: 'jogo', passagem: true, cena: [
     'Uma porta lateral, por onde ela entrou.',
     'Escuro. O corredor vermelho de novo.',
     'Agora há duas portas: a trancada e uma nova, mais escura, de moldura vermelha e fechadura grande.',
@@ -732,7 +721,7 @@ function tronco(V) {
     { l: 'Abrir a porta', p: 53, n: abrir1 },
   ] });
 
-  const direita = no('direita', { t: 'Direita: o corredor vermelho', k: 'des', cena: [
+  const direita = no('direita', { t: 'Direita: o corredor vermelho', k: 'des', passagem: true, cena: [
     'Molduras vermelhas pintadas à mão nas paredes, cada vez mais fundas.',
     'Um balde de tinta vermelha, com rastro.',
     'Uma seta vermelha. Uma porta comum na parede.',
@@ -753,7 +742,7 @@ function tronco(V) {
     { l: 'Seguir o vermelho', p: 70, n: vermelho },
   ] });
 
-  const raiz = no('inicio', { t: 'O corredor branco', k: 'des', cena: [
+  const raiz = no('inicio', { t: 'O corredor branco', k: 'des', passagem: true, cena: [
     'Tela vermelha: "O destino está em suas mãos".',
     'Ela desperta, a vista borrada, num corredor branco. Uma lâmpada.',
     'Na parede do fundo, setas vermelhas para os dois lados. Um pingo de tinta vermelha no chão.',
@@ -2660,7 +2649,7 @@ function prepara(ver) {
 /* conserta para salvar: tira campos calculados (pai, ref…) */
 function limpo(nd) {
   const o = {};
-  ['id', 't', 'k', 'bat', 'cena', 'q', 'go', 'mem', 'obj', 'fim', 'conversa', 'volta', 'voltas'].forEach(k => { if (nd[k] != null && nd[k] !== '' && !(Array.isArray(nd[k]) && !nd[k].length)) o[k] = clone(nd[k]); });
+  ['id', 't', 'k', 'bat', 'cena', 'q', 'go', 'mem', 'obj', 'fim', 'conversa', 'passagem', 'volta', 'voltas'].forEach(k => { if (nd[k] != null && nd[k] !== '' && !(Array.isArray(nd[k]) && !nd[k].length)) o[k] = clone(nd[k]); });
   if (nd.ops) o.ops = nd.ops.map(op => {
     const r = {}; ['l', 'p', 'req', 'se', 'c', 'go'].forEach(k => { if (op[k] != null && op[k] !== '') r[k] = op[k]; });
     if (op.n) r.n = limpo(op.n); return r;
@@ -2801,7 +2790,7 @@ function desenhaNo() {
     return h + `<a href="#${v.chave}/${t.ref || '0'}" class="${i === P.trilha.length - 1 ? 'aqui' : ''}${t.vez ? ' de-volta' : ''}">${esc(r)}</a>`;
   }).join('');
   let h = `<nav class="trilha" aria-label="caminho até aqui">${trilha}</nav>`;
-  const volta = cur.vez ? `<span class="k k-volta">${nd.conversa ? 'conversa de novo' : 'de volta'} · ${cur.vez + 1}ª vez</span>` : '';
+  const volta = cur.vez ? `<span class="k k-volta">${nd.conversa ? 'conversa de novo' : nd.passagem ? 'passagem' : 'de volta'} · ${cur.vez + 1}ª vez</span>` : '';
   h += `<header class="cab"><div class="refgrande">${v.chave === 'm' ? 'Minha' : 'V' + v.n} · <b>${esc(rotPerc(P.ref))}</b>
     <button class="mini" id="copiaRef" title="copiar a referência">copiar ref.</button></div>
     <h1>${esc(c.t || '(sem título)')}</h1>
@@ -2872,6 +2861,7 @@ function editor(nd) {
   <label>Como fica este trecho quando ela passa de novo — um quadro por linha; separe cada passagem com uma linha só com <code>---</code>
     <textarea name="voltas" rows="${Math.max(3, MOTOR.voltasDe(nd).reduce((n, x) => n + (x.cena || []).length + 1, 0) + 1)}" placeholder="vazio = depois da primeira vez, a opção que leva aqui fica indisponível">${esc(MOTOR.voltasDe(nd).map(x => (x.cena || []).join('\n')).join('\n---\n'))}</textarea></label>
   <label class="caixa"><input type="checkbox" name="sempre" ${(MOTOR.voltasDe(nd).slice(-1)[0] || {}).sempre ? 'checked' : ''}> a última versão vale para todas as vezes seguintes</label>
+  <label class="caixa"><input type="checkbox" name="passagem" ${nd.passagem ? 'checked' : ''}> é uma passagem (corredor com portas, cabine): pode ser atravessada sempre, mesmo igual</label>
   <label class="caixa"><input type="checkbox" name="conversa" ${nd.conversa ? 'checked' : ''}> é uma conversa (não se repete no mesmo ciclo; no ciclo seguinte volta a ficar disponível)</label>
   <p class="dica">Um quadro que começa com <code>{id}</code> só aparece se ela já passou por esse trecho neste ciclo; <code>{!id}</code>, se ainda não passou.</p></fieldset>
   <div class="linha"><label>Memórias ganhas (vírgula) <input name="mem" value="${esc((nd.mem || []).join(', '))}"></label>
@@ -2909,7 +2899,7 @@ function ligaEditor(nd) {
     const antigas = MOTOR.voltasDe(nd), blocos = f.voltas.value.split(/^\s*---\s*$/m).map(b => b.split('\n').map(x => x.trim()).filter(Boolean)).filter(b => b.length);
     delete nd.volta; nd.voltas = blocos.length ? blocos.map((cena, i) => Object.assign({}, antigas[i], { cena })) : undefined;
     if (nd.voltas) { nd.voltas.forEach(x => delete x.sempre); if (f.sempre.checked) nd.voltas[nd.voltas.length - 1].sempre = true; }
-    nd.conversa = f.conversa.checked || undefined;
+    nd.conversa = f.conversa.checked || undefined; nd.passagem = f.passagem.checked || undefined;
     f.querySelectorAll('[data-f]').forEach(i => { nd.ops[+i.dataset.k][i.dataset.f] = i.value || undefined; });
     salvaMinha(); desenhaLado();
   };
