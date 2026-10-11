@@ -203,6 +203,22 @@ a.opt:hover { transform: translateX(3px); box-shadow: -4px 0 0 var(--verm); }
   .acoes button { padding: 7px 12px; }
   .ferr button, .copiar button, .ferr .botao { padding: 8px 12px; }
 }
+
+/* percurso com estado */
+.k-volta { color: #8fb6e0; border-color: #3d5a78; }
+.trilha .ciclo { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--ouro); border: 1px solid #7a6431; border-radius: 4px; padding: 1px 6px; }
+.trilha a.de-volta { box-shadow: inset 0 -2px 0 #8fb6e0; }
+.opt.fechada { background: #222; color: #6d6d6d; cursor: not-allowed; }
+.opt.fechada .lbl { text-decoration: line-through; text-decoration-color: #555; }
+.opt.fechada .num, .opt.fechada .dest { color: #7d7d7d; }
+.espiar { color: var(--ouro); margin-left: 6px; cursor: pointer; }
+.aviso.espiando { margin: 10px 0; }
+.estado { margin: 12px 0 0; font-size: 13px; color: var(--apagado); }
+.estado summary { cursor: pointer; }
+.estado ul { margin: 6px 0 0; padding-left: 18px; }
+.estado b { color: var(--texto); font-weight: 600; }
+.ed .caixa { display: flex; gap: 8px; align-items: center; }
+.ed .caixa input { width: auto; display: inline; margin: 0; }
 </style>
 </head>
 <body>
@@ -223,6 +239,118 @@ a.opt:hover { transform: translateX(3px); box-shadow: -4px 0 0 var(--verm); }
   </main>
 </div>
 <script>/* ============================================================
+   DESTINO — motor do percurso: o que ela já viu, carrega e lembra.
+
+   Percurso = números das opções escolhidas desde o corredor; um ciclo
+   novo começa depois de "~" (ex.: 2.2.1~2.2.2 = morreu olhando para
+   trás e, no Ciclo II, abriu a porta). Nó com "go" e sem opções segue
+   pelo passo 1.
+
+   Regras:
+   - Um trecho já visto neste ciclo só se repete pela sua volta
+     (nd.volta ou nd.voltas[i], que trocam cena/opções/fim do original).
+     Sem volta, a opção que leva a ele fica indisponível.
+   - Trechos com conversa: true contam entre ciclos: um diálogo que já
+     aconteceu só volta diferente (pela volta), nunca igual.
+   - A última volta com sempre: true vale para todas as vezes seguintes.
+   - Opção com req exige uma memória (de qualquer ciclo) ou um objeto
+     (deste ciclo). Opção com se: 'id,!id' exige ter passado (ou não)
+     por esses trechos neste ciclo.
+   - Quadro que começa com {id,!id} só aparece se a condição valer.
+   ============================================================ */
+'use strict';
+const MOTOR = (() => {
+  const voltasDe = nd => nd.voltas || (nd.volta ? [nd.volta] : []);
+  /* conteúdo da passagem número vez (0 = a primeira); null = esgotado */
+  function versao(nd, vez) {
+    if (!vez) return nd;
+    const vs = voltasDe(nd);
+    let v = vs[vez - 1];
+    if (!v && vs.length && vs[vs.length - 1].sempre) v = vs[vs.length - 1];
+    if (!v) return null;
+    const c = Object.assign({}, nd, v, { _volta: vez });
+    if (v.ops === undefined && v.go !== undefined) delete c.ops;
+    if (v.go === undefined && v.ops !== undefined) delete c.go;
+    return c;
+  }
+  function novoEstado() { return { ciclo: 1, vistos: {}, conversas: {}, mem: new Set(), obj: new Set() }; }
+  function novoCiclo(E) { E.ciclo++; E.vistos = {}; E.obj = new Set(); }
+  const viu = (E, id) => (E.vistos[id] || 0) > 0;
+  const vez = (E, nd) => (nd.conversa ? E.conversas[nd.id] : E.vistos[nd.id]) || 0;
+  function vale(cond, E) {
+    return String(cond || '').split(',').map(s => s.trim()).filter(Boolean)
+      .every(c => c[0] === '!' ? !viu(E, c.slice(1)) : viu(E, c));
+  }
+  /* quadros que valem nesta passagem, sem a marca de condição */
+  function cena(c, E) {
+    return (c.cena || []).map(s => {
+      const m = String(s).match(/^\{([^}]*)\}\s*([\s\S]*)$/);
+      if (!m) return s;
+      return vale(m[1], E) ? m[2] : null;
+    }).filter(s => s != null);
+  }
+  /* entra num trecho: devolve o conteúdo desta passagem e atualiza o estado */
+  function entra(nd, E) {
+    const n = vez(E, nd), c = versao(nd, n);
+    E.vistos[nd.id] = (E.vistos[nd.id] || 0) + 1;
+    if (nd.conversa) E.conversas[nd.id] = (E.conversas[nd.id] || 0) + 1;
+    const x = c || nd;
+    (x.mem || []).forEach(m => E.mem.add(m));
+    (x.obj || []).forEach(o => E.obj.add(o));
+    return { nd, c, vez: n };
+  }
+  /* opções que saem deste conteúdo (go sem opções = um passo só) */
+  function saidas(c) {
+    if (c.fim) return [];
+    if (c.ops && c.ops.length) return c.ops;
+    if (c.go) return [{ l: 'segue', go: c.go, segue: true }];
+    return [];
+  }
+  const alvoDe = (o, porId) => o.n || (o.go ? porId[o.go] : null);
+  /* a opção está disponível? motivo: se | req | vazio | visto | conversado */
+  function opcao(o, E, porId) {
+    const alvo = alvoDe(o, porId);
+    if (o.se && !vale(o.se, E)) return { ok: false, motivo: 'se', alvo };
+    if (o.req && !E.mem.has(o.req) && !E.obj.has(o.req)) return { ok: false, motivo: 'req', alvo };
+    if (!alvo) return { ok: false, motivo: 'vazio' };
+    const n = vez(E, alvo);
+    if (!versao(alvo, n)) return { ok: false, motivo: alvo.conversa && !viu(E, alvo.id) ? 'conversado' : 'visto', alvo };
+    return { ok: true, alvo, vez: n };
+  }
+  /* refaz um percurso; passos fora das regras viram avisos (modo espiar) */
+  function percorre(raiz, porId, ref, E0) {
+    const E = E0 || novoEstado(), trilha = [], avisos = [];
+    const ciclos = String(ref || '').split('~');
+    let feito = [];
+    ciclos.forEach((passos, ci) => {
+      if (ci > 0) {
+        const ult = trilha[trilha.length - 1], c = ult && (ult.c || ult.nd);
+        if (!c || !c.fim || c.fim.t === 'final') { avisos.push({ ciclo: E.ciclo, motivo: 'semFim' }); }
+        novoCiclo(E);
+      }
+      let at = Object.assign(entra(raiz, E), { ref: feito.concat(['']).join('~'), ciclo: E.ciclo, via: null });
+      trilha.push(at);
+      const ps = passos.split('.').filter(Boolean);
+      const daqui = [];
+      for (const p of ps) {
+        const c = at.c || at.nd, ops = saidas(c), o = ops[+p - 1];
+        if (!o) break;
+        const st = opcao(o, E, porId);
+        if (!st.alvo) break;
+        if (!st.ok) avisos.push({ passo: daqui.concat([p]).join('.'), ciclo: E.ciclo, motivo: st.motivo, o });
+        daqui.push(p);
+        at = Object.assign(entra(st.alvo, E), { ref: feito.concat([daqui.join('.')]).join('~'), ciclo: E.ciclo, via: o });
+        trilha.push(at);
+      }
+      feito.push(daqui.join('.'));
+    });
+    return { trilha, E, avisos, ref: feito.join('~') };
+  }
+  return { versao, voltasDe, novoEstado, novoCiclo, vale, cena, entra, saidas, opcao, percorre, viu };
+})();
+if (typeof module !== 'undefined') module.exports = MOTOR;
+
+/* ============================================================
    DESTINO — árvore de narrativas: o tronco comum às três versões.
    O caminho desenhado (Ciclo I) e o que já está no jogo 3D são
    iguais em todas; cada versão preenche os galhos (V.<gancho>).
@@ -232,17 +360,21 @@ a.opt:hover { transform: translateX(3px); box-shadow: -4px 0 0 var(--verm); }
        q: pergunta, ops: [opção], go: 'id' (segue sem escolha),
        mem: [memórias ganhas], obj: [objetos do ciclo], fim: {t, n, d} }
    Opção: { l: texto, p: votação original, n: nó filho | go: 'id',
-            req: memória exigida, c: condição em texto }
+            req: memória ou objeto exigido, se: 'id,!id' (passou ou não
+            por esses trechos neste ciclo), c: condição em texto }
+   Voltas: volta: {cena, ops…} ou voltas: [...] = como o trecho fica
+     quando ela passa de novo; conversa: true = conta entre ciclos.
+     Quadro com {id,!id} na frente só aparece se a condição valer.
+     As regras estão em motor.js.
    Quadros: texto simples = o que se vê; prefixos:
      B: bilhete do autor · D: bilhete datilografado · A: bilhete do ser alto
      F: fala vermelha · M: máquina de escrever · S: som desenhado
      N: nota de design · @voz: canal próprio da versão (ver "vozes")
    Em bilhetes e falas, " / " quebra a linha.
 
-   Regra das voltas: dentro de um mesmo ciclo nenhum trecho se repete.
-   Quem volta a um lugar encontra um trecho de volta (o lugar mudou, e
-   só restam as escolhas que ainda fazem sentido com o que ela carrega)
-   ou o ciclo se fecha. Um "go" nunca aponta para trás no caminho.
+   Regra das voltas: voltar a um lugar pode, repetir não pode. O que
+   ela já pegou, já perguntou ou já viu não se oferece de novo igual;
+   o que mudou continua mudado; diálogo só se repete se destrava algo.
    ============================================================ */
 'use strict';
 const VERSOES = [];
@@ -262,15 +394,12 @@ const escolhaSerAlto = () => [
   { l: 'Passar correndo', go: 'passar' },
   { l: 'Dar meia volta', go: 'meiaVolta' },
 ];
-/* o corredor branco depois da Esquerda: só resta a Direita */
-const voltaEsquerda = cena => ({ id: 'voltaEsquerda', t: 'O corredor branco, de volta', k: 'novo', cena, q: '?', ops: [
-  { l: 'Direita', go: 'direita' },
-] });
 const escolhaToca = () => [
   { l: 'Quem é você?', go: 'quem' },
   { l: 'Onde eu estou?', go: 'onde' },
   { l: 'Como eu saio daqui?', go: 'como' },
   { l: 'Por que você não suporta a luz?', go: 'porque' },
+  { l: 'Ficar em silêncio', go: 'silencio' },
 ];
 
 function tronco(V) {
@@ -278,6 +407,10 @@ function tronco(V) {
   const no = (id, nd) => nota(id, Object.assign({ id }, nd));
   /* galho que a versão escreve; na árvore editável (V.base) fica vazio, esperando ser escrito */
   const gancho = (id, nd) => { if (!nd) { if (V.base) return null; throw new Error('versão sem o galho ' + id); } nd.id = nd.id || id; return nd; };
+  /* as falas da toca contam entre ciclos: uma pergunta feita não se faz de novo */
+  const conversa = nd => { if (nd && nd.conversa === undefined) nd.conversa = true; return nd; };
+  ['onde', 'como', 'porque', 'naoLembro'].forEach(k => conversa(V[k]));
+  (V.perguntasExtras || []).forEach(o => conversa(o.n));
 
   /* trechos do jogo que a versão pode reescrever: ganham o id e as notas do original */
   ['cima', 'meio', 'baixo', 'espelhoCobrir', 'espelhoPortal', 'recolhedor'].forEach(k => {
@@ -292,57 +425,55 @@ function tronco(V) {
     'O sono vem antes de quem bate.',
   ], fim: { t: 'recomeco', n: 'O sono', d: 'Acorda no corredor, sem susto. Novo ciclo.' } });
 
-  /* trechos de volta: entram na árvore na primeira opção que aponta para eles */
-  const elevadorDeVolta = no('elevadorDeVolta', { t: 'A cabine, de volta', k: 'novo', cena: [
-    'A grade bate. A cabine desce sozinha até a antessala.',
-    'O botão de cima afundou e não volta mais. Os outros dois esperam.',
-  ], q: '?', ops: [
-    { l: 'Botão do meio', go: 'meio' },
-    { l: 'Botão de baixo', go: 'baixo' },
-  ] });
-  const elevadorUltimo = no('elevadorUltimo', { t: 'A cabine, pela última vez', k: 'novo', cena: [
-    'A grade se fecha antes que ela encoste.',
-    'O botão de cima e o do meio apagam sozinhos.',
-    'Só o de baixo continua aceso, com a marca do dedo vermelho.',
-  ], q: '?', ops: [
-    { l: 'Botão de baixo', go: 'baixo' },
-    { l: 'Não apertar', n: no('cabineParada', { t: 'A cabine parada', k: 'novo', cena: [
-      'Ela senta no chão da cabine.',
-      'Nada se mexe. A lâmpada do teto fica amarela, depois laranja.',
-      'S: Toc Toc',
-      'Alguém bate na grade, por fora, com a ponta dos dedos.',
-      'Ela não abre os olhos para ver quem é. O sono vem primeiro.',
-    ], fim: { t: 'recomeco', n: 'A cabine parada', d: 'Recomeço sem susto.' } }) },
-  ] });
-  const salaDeVolta = no('salaDeVolta', { t: 'A sala branca, de volta', k: 'novo', cena: [
-    'A luz do "?" a devolve à sala branca.',
-    'O buraco CHAVE está vazio. Do bilhete da regra sobrou só o furo do prego.',
-    'O "?" continua aceso por dentro, como se esperasse a mão dela.',
-  ], q: '?', ops: [
-    { l: '?', go: 'buraco' },
-  ] });
-
   const elevador = no('elevador', { t: 'A porta nova: o elevador', k: 'jogo', cena: [
     'A chave serve. Uma antessala.',
     'Um elevador de grade.',
     'Três botões sem número. O de baixo tem um dedo vermelho.',
+  ], voltas: [
+    { cena: [
+      'A grade se abre. A cabine espera com a luz mais fraca.',
+      '{cima}No botão de cima ficou a marca de um dedo. O dela.',
+      '{meio}O botão do meio está morno, como uma mão que acabou de sair.',
+    ] },
+    { cena: [
+      'A cabine de novo. Agora a lâmpada do teto pisca no ritmo de uma batida.',
+      'Na parede de grade, alguém amarrou um fio vermelho que não estava ali.',
+    ] },
+    { cena: [
+      'A grade nem chega a fechar. A cabine já sabe que ela volta.',
+      'O dedo vermelho do botão de baixo está mais nítido. Escorre um pouco.',
+    ] },
+    { cena: [
+      'A cabine. Só a lâmpada, o fio vermelho e o dedo que escorre.',
+      'M: Ela anda em círculos.',
+    ] },
   ], q: '?', ops: [
     { l: 'Botão de cima', p: 34, n: V.cima || no('cima', { t: 'Botão de cima: o arquivo', k: 'jogo', cena: [
       'Um arquivo: estantes até o escuro, pacotes de papel amarrados com fio vermelho.',
       'Na máquina de escrever, um papel.',
       'D: VOCÊ NÃO DEVIA / TER SUBIDO / SEM LUZ.',
       'As luzes apagam, uma a uma, até a cabine.',
-    ], q: '?', ops: [
-      { l: 'Correr para a cabine', go: 'elevadorDeVolta' },
+    ], volta: { cena: [
+      'O arquivo continua apagado desde a última vez. As luzes não voltaram.',
+      'Na máquina, o papel mudou:',
+      'D: DE NOVO / SEM LUZ.',
+      'Entre as estantes, longe, um pacote cai sozinho.',
+    ] }, q: '?', ops: [
+      { l: 'Correr para a cabine', go: 'elevador' },
     ] }) },
     { l: 'Botão do meio', p: 28, n: V.meio || no('meio', { t: 'Botão do meio: o quarto', k: 'jogo', cena: [
       'O quarto de alguém. A cama ainda tem a forma de quem dormia. Um copo d\'água. Um relógio parado.',
       'No travesseiro:',
       'B: NÃO DEITE. / EU DEITEI UMA VEZ / E ACORDEI / NO CORREDOR.',
       'S: Toc Toc',
-    ], q: '?', ops: [
+    ], volta: { cena: [
+      'O quarto de novo. O copo d\'água está vazio.',
+      'O bilhete do travesseiro sumiu. A forma no colchão ficou mais funda, e agora tem o tamanho dela.',
+      'A batida na porta já começou antes de ela entrar.',
+      'S: Toc Toc',
+    ] }, q: '?', ops: [
       { l: 'Deitar na cama', p: 45, n: deitar },
-      { l: 'Voltar ao elevador', p: 55, go: 'elevadorUltimo' },
+      { l: 'Voltar ao elevador', p: 55, go: 'elevador' },
     ] }) },
     { l: 'Botão de baixo', p: 38, n: V.baixo || no('baixo', { t: 'Botão de baixo: o andar inundado', k: 'jogo', cena: [
       'Andar inundado. Velas vermelhas boiando. Um vulto de costas.',
@@ -372,7 +503,7 @@ function tronco(V) {
       'O avesso da parede dos buracos. O braço de garras espera junto ao "?".',
       'Ele recua.',
     ], q: '?', ops: [
-      { l: 'Seguir a luz do "?"', go: 'salaDeVolta' },
+      { l: 'Seguir a luz do "?"', go: 'abrir1' },
     ] }) },
   ] });
 
@@ -380,7 +511,11 @@ function tronco(V) {
     'Uma porta lateral, por onde ela entrou.',
     'Escuro. O corredor vermelho de novo.',
     'Agora há duas portas: a trancada e uma nova, mais escura, de moldura vermelha e fechadura grande.',
-  ], q: '?', ops: [
+  ], volta: { cena: [
+    'O corredor vermelho outra vez. As duas portas continuam ali.',
+    '{espelhos}A dos espelhos ficou entreaberta. Lá dentro, um lençol sobe e desce, como se respirasse.',
+    '{elevador}Na porta nova, a fechadura ainda tem a marca da chave dela.',
+  ] }, q: '?', ops: [
     { l: 'Entrar na porta trancada', p: 50, n: espelhos },
     { l: 'Entrar na porta nova', p: 50, n: elevador },
   ] });
@@ -389,10 +524,12 @@ function tronco(V) {
     'A mão entra no buraco "CHAVE".',
     'Uma chave velha, num fio vermelho.',
     'M: Você possui uma chave.',
-    'Sem lanterna. Atrás, a porta cinza.',
-    'S: Toc Toc',
+    '{!buraco}Sem lanterna. Atrás, a porta cinza.',
+    '{buraco}A lanterna treme na outra mão. Atrás, a porta cinza, a mesma que ela já abriu.',
+    '{!buraco}S: Toc Toc',
+    '{buraco}Desta vez ninguém bate. Na parede lateral, uma porta que ela não tinha visto está aberta.',
   ], q: '?', ops: [
-    { l: 'Abrir a porta', p: 78, n: no('abrirChave', { t: 'Abrir a porta (sem lanterna)', k: 'jogo', cena: [
+    { l: 'Abrir a porta', p: 78, se: '!buraco', n: no('abrirChave', { t: 'Abrir a porta (sem lanterna)', k: 'jogo', cena: [
       'A floresta. As pernas.',
       'Cai um papel.',
       'A: SEM LUZ, AQUI FORA / VOCÊ NÃO DURA / NEM ATÉ A PRIMEIRA ÁRVORE. / FIQUE AÍ DENTRO... / POR ENQUANTO.',
@@ -424,7 +561,7 @@ function tronco(V) {
     { l: 'Dar meia volta', p: 5, n: gancho('meiaVolta', V.meiaVolta) },
   ] });
 
-  const corredor = no('corredor', { t: 'Recentemente acordei em um corredor', k: 'des', cena: [
+  const corredor = no('corredor', { t: 'Recentemente acordei em um corredor', k: 'des', conversa: true, cena: [
     'F: JÁ NÃO SEI / HÁ QUANTAS VIDAS / ISSO ACONTECEU-',
     'F: ESPERA...',
     'Os olhos dele acendem em vermelho.',
@@ -433,12 +570,17 @@ function tronco(V) {
     'F: NÃO ME DIGA / QUE VOCÊ É UMA / RECÉM / CHEGADA...',
     'F: ISSO É / BOM.',
     'F: SIGNIFICA QUE / VOCÊ AINDA / ESTÁ FRESCA.',
-  ], q: '?', ops: [
+  ], voltas: [{ sempre: true, cena: [
+    'F: UM CORREDOR. / DE NOVO.',
+    'Os olhos dele acendem antes de ela terminar.',
+    'F: VOCÊ VOLTA / SEMPRE / FRESCA.',
+    'F: COMO?',
+  ] }], q: '?', ops: [
     { l: 'Ligar a lanterna', p: 81, n: ligar },
     { l: 'Fugir no escuro', p: 19, n: gancho('fugir', V.fugir) },
   ] });
 
-  const quem = no('quem', { t: 'Quem é você?', k: 'des', cena: [
+  const quem = no('quem', { t: 'Quem é você?', k: 'des', conversa: true, cena: [
     'F: QUEM SOU EU? / HÁ TEMPOS / PERDI A RESPOSTA / DESSA PERGUNTA.',
     'F: NA VERDADE NÃO / ME LEMBRO SE / ALGUM DIA SOUBE / QUEM SOU.',
     'F: A MEMÓRIA MAIS / ANTIGA QUE TENHO / É UMA EM QUE / ACORDO EM UM CORREDOR.',
@@ -447,19 +589,42 @@ function tronco(V) {
     { l: 'Também não lembro quem sou', p: 30, n: gancho('naoLembro', V.naoLembro) },
   ] });
 
-  const desligada = no('desligada', { t: 'Entrar com a lanterna desligada', k: 'des', cena: [
+  const silencio = no('silencio', { t: 'Ficar em silêncio', k: 'novo', conversa: true, cena: [
+    'Ela não pergunta nada.',
+    'Ele também não. A vela estala.',
+    'F: ...',
+    'F: VOCÊ / ACORDOU / NUM CORREDOR?',
+  ], voltas: [{ sempre: true, cena: [
+    'Ela não pergunta nada. Ele já não espera perguntas.',
+    'F: AINDA / FRESCA?',
+  ] }], q: '...', ops: escolhaQuem().filter(o => !V.base || o.go !== 'naoLembro') });
+
+  const desligada = no('desligada', { t: 'Entrar com a lanterna desligada', k: 'des', conversa: true, cena: [
     'S: click',
     'A porta empurrada cai para trás como alçapão. Ela desce no escuro.',
     'Uma vela vermelha. Uma figura sentada, abraçando os joelhos.',
     'F: OLÁ.',
     'F: EU NÃO COSTUMO / RECEBER VISITAS...',
     'F: OBRIGADO POR APAGAR / A SUA LANTERNA, / EU NÃO SUPORTO MAIS / ESSE TIPO DE LUZ.',
+  ], voltas: [
+    { cena: [
+      'S: click',
+      'O alçapão. A vela vermelha. Ele, no mesmo lugar.',
+      'F: ...VOCÊ.',
+      'F: JÁ ESTEVE / AQUI.',
+      'F: EU LEMBRO / DO CHEIRO.',
+    ] },
+    { sempre: true, cena: [
+      'S: click',
+      'A vela. Ele nem levanta a cabeça.',
+      'F: DE NOVO.',
+    ] },
   ], q: '?', ops: [
     { l: 'Quem é você?', p: 48, n: quem },
     { l: 'Onde eu estou?', p: 8, n: gancho('onde', V.onde) },
     { l: 'Como eu saio daqui?', p: 3, n: gancho('como', V.como) },
     { l: 'Por que você não suporta a luz?', p: 41, n: gancho('porque', V.porque) },
-  ].concat(V.perguntasExtras || []) });
+  ].concat(V.perguntasExtras || [], [{ l: 'Ficar em silêncio', n: silencio }]) });
 
   const trilha = no('trilha', { t: 'Seguir a trilha vermelha', k: 'des', bat: '18% → 17%', cena: [
     'Uma fita vermelha amarrada entre as árvores.',
@@ -514,9 +679,28 @@ function tronco(V) {
     'Na parede do fundo, dois buracos: um redondo marcado "CHAVE", outro rasgado marcado "?".',
     'Entre eles, um bilhete preso.',
     'B: Você fez a escolha certa / não olhando para trás. / Regra número 1: se você olhar / para ele você morre. / Eu mesmo já morri algumas vezes.',
+  ], voltas: [
+    { cena: [
+      'A sala branca de novo. A lâmpada balança, como se alguém tivesse acabado de passar.',
+      '{buraco}O "?" está escuro e fundo. A mão de garras não espera mais ali.',
+      '{chave}O buraco CHAVE está vazio. Ficou um fio vermelho cortado na borda.',
+      'Do bilhete da regra sobrou só o furo do prego.',
+    ] },
+    { cena: [
+      'A sala branca, pela terceira vez. A lâmpada está apagada; a luz vem do chão, como de uma fresta.',
+      '{buraco,chave}Os dois buracos estão vazios. Não há mais nada para pegar.',
+      'No lugar do bilhete, alguém escreveu na parede, com o dedo: AINDA AQUI?',
+    ] },
   ], q: 'ESCOLHA', ops: [
     { l: '?', p: 56, n: buraco },
     { l: 'Chave', p: 44, n: chave },
+    { l: 'Sentar e esperar', se: 'buraco,chave', n: no('salaVazia', { t: 'A sala vazia', k: 'novo', cena: [
+      'Ela senta no chão branco, com a lanterna e a chave no colo.',
+      'Não há mais o que escolher aqui. Isso é quase um alívio.',
+      'S: Toc Toc',
+      'A batida vem de dentro da parede, dos dois buracos ao mesmo tempo.',
+      'Ela fecha os olhos antes de descobrir quem é.',
+    ], fim: { t: 'recomeco', n: 'A sala vazia', d: 'Recomeço sem susto, depois de pegar tudo o que a sala tinha.' } }) },
   ] });
 
   const olhar = no('olhar', { t: 'Olhar para trás', k: 'jogo', cena: [
@@ -551,12 +735,20 @@ function tronco(V) {
     'Molduras vermelhas pintadas à mão nas paredes, cada vez mais fundas.',
     'Um balde de tinta vermelha, com rastro.',
     'Uma seta vermelha. Uma porta comum na parede.',
+  ], voltas: [
+    { cena: [
+      'O corredor vermelho de novo. A porta comum continua trancada.',
+      'O rastro do balde está mais longo do que antes, como se alguém tivesse arrastado o balde enquanto ela tentava a maçaneta.',
+    ] },
+    { cena: [
+      'O corredor vermelho, mais uma vez. As molduras parecem mais perto umas das outras.',
+      'O balde sumiu. Ficou só o rastro, que agora vai até a porta comum e entra por baixo dela.',
+    ] },
   ], q: '?', ops: [
     { l: 'Entrar na porta', p: 30, n: no('portaTrancada', { t: 'A porta comum', k: 'jogo', cena: [
       'A maçaneta trava.',
       'M: Porta trancada.',
-      'Só resta seguir o vermelho.',
-    ], go: 'vermelho' }) },
+    ], go: 'direita' }) },
     { l: 'Seguir o vermelho', p: 70, n: vermelho },
   ] });
 
@@ -564,13 +756,16 @@ function tronco(V) {
     'Tela vermelha: "O destino está em suas mãos".',
     'Ela desperta, a vista borrada, num corredor branco. Uma lâmpada.',
     'Na parede do fundo, setas vermelhas para os dois lados. Um pingo de tinta vermelha no chão.',
-  ], q: '?', ops: [
+  ], volta: { cena: V.inicioVolta || [
+    'O corredor branco, de volta. A lâmpada zumbe mais baixo.',
+    'O pingo de tinta no chão virou um rastro, para a direita.',
+  ] }, q: '?', ops: [
     { l: 'Esquerda', p: 40, n: gancho('esquerda', V.esquerda) },
     { l: 'Direita', p: 60, n: direita },
   ] });
 
   /* trechos soltos (deitar, as voltas): entram na primeira opção que aponta para eles */
-  [deitar, elevadorDeVolta, elevadorUltimo, salaDeVolta].forEach(solto => {
+  [deitar].forEach(solto => {
     const ids = new Set(); let pend = null;
     (function walk(nd) {
       if (!nd || ids.has(nd.id)) return; if (nd.id) ids.add(nd.id);
@@ -614,15 +809,7 @@ function tronco(V) {
               'As folhas a cobrem como um lençol. Um fio vermelho dá a volta, uma vez, duas.',
               'No arquivo, no andar de cima, há um pacote novo. Com etiqueta.',
             ], fim: { t: 'final', n: 'Encadernada', d: 'Final ruim. Ela vira um pacote no arquivo. Não há recomeço.' } } },
-          { l: 'Voltar pela luz do "?"', n: {
-            id: 'salaFechada', t: 'A sala fechada', k: 'novo', cena: [
-              'A luz do "?" a devolve à sala branca. O buraco se fecha atrás dela, rebocado, com a massa ainda úmida.',
-              'O outro buraco também. A porta cinza não tem mais maçaneta.',
-              'Onde estava o bilhete da regra, uma folha datilografada, ainda morna:',
-              'D: ELA VOLTA À SALA. / ELA ESPERA.',
-              'Ela espera. Do outro lado da parede, a máquina recomeça.',
-              'M: Ela dorme.',
-            ], fim: { t: 'recomeco', n: 'Rascunho', d: 'Recomeço sem susto: o Datilógrafo vira a página. Ela leva a memória O rascunho.' } } },
+          { l: 'Voltar pela luz do "?"', go: 'abrir1' },
         ] } },
       { l: 'Tirar o papel da máquina', n: {
         id: 'emBranco', t: 'Em branco', k: 'novo', cena: [
@@ -674,6 +861,11 @@ function tronco(V) {
       cima: 'na versão 1 este andar ganha uma escolha: veja o botão de cima.',
     },
     h: {
+      inicioVolta: [
+        'Ela volta. As folhas em branco vêm atrás dela, arrastadas, até a lâmpada.',
+        'A costura não para.',
+        'O pingo de tinta no chão virou um rastro. Para a direita.',
+      ],
       esquerda: {
         t: 'Esquerda: o corredor cinza', k: 'novo', cena: [
           'O lado que o vermelho não marca. As paredes são cinzentas, de um cinza de papel molhado.',
@@ -720,13 +912,9 @@ function tronco(V) {
                   'Atrás dela, o corredor começa a se desfazer em folhas.',
                   'M: Fim.',
                 ], fim: { t: 'final', n: 'Ponto final', d: 'A fuga. Ela sai, e as folhas caem como neve. Fica a dúvida: o Datilógrafo deixou, ou só escreveu depois?' } } },
-              { l: 'Voltar', n: voltaEsquerda([
-                'Ela volta. As folhas em branco vêm atrás dela, arrastadas, até a lâmpada.',
-                'A costura não para.',
-                'O pingo de tinta no chão virou um rastro. Para a direita.',
-              ]) },
+              { l: 'Voltar', go: 'inicio' },
             ] } },
-          { l: 'Voltar', go: 'voltaEsquerda' },
+          { l: 'Voltar', go: 'inicio' },
         ],
       },
 
@@ -846,13 +1034,18 @@ function tronco(V) {
           'F: APAGUE, / POR FAVOR.',
         ], q: '?', ops: [
           { l: 'Apagar', n: {
-            t: 'Tarde', k: 'novo', cena: [
+            t: 'Tarde', k: 'novo', conversa: true, cena: [
               'S: click',
               'A vela.',
               'F: ...ELAS / NÃO ACORDARAM.',
               'F: DESSA VEZ.',
-              'N: segue como a toca escura, com as mesmas perguntas; as formas vermelhas acordam ao primeiro click.',
-            ], q: '?', ops: escolhaToca() } },
+              'N: segue como a toca escura; as perguntas já feitas em outros ciclos ficam fechadas.',
+            ], voltas: [{ sempre: true, cena: [
+              'S: click',
+              'A vela.',
+              'F: DE NOVO / COM ESSA LUZ.',
+              'F: UM DIA / ELAS ACORDAM.',
+            ] }], q: '?', ops: escolhaToca() } },
           { l: 'Manter acesa', n: {
             t: 'À luz', k: 'novo', cena: [
               'A luz fica nele. Ele chora sem som.',
@@ -876,11 +1069,9 @@ function tronco(V) {
               'Do outro lado, alguém prende a respiração.',
               'Ninguém abre. Ninguém responde.',
               'Ela reconhece a batida. É a que ela ouviu lá de dentro.',
-              'A porta se abre sozinha. A sala branca está vazia: os dois buracos foram rebocados, a massa ainda úmida.',
-              'No chão, no lugar onde ela estava quando ouviu a batida, uma folha datilografada:',
-              'D: ELA BATE / NA PRÓPRIA / PORTA.',
-              'A lâmpada apaga. Lá fora, alguém bate de novo, do jeito dela.',
-            ], fim: { t: 'recomeco', n: 'A própria batida', d: 'Recomeço sem susto. Deixa a pergunta: era ela quem batia, da outra vez?' } } },
+              'A porta se abre sozinha.',
+              'N: de volta à sala branca com a lanterna: o "?" não oferece mais nada; resta a Chave. Deixa a pergunta: era ela quem batia, da outra vez?',
+            ], go: 'abrir1' } },
           { l: 'Esperar', n: {
             t: 'Espera', k: 'novo', bat: '15% → 0%', cena: [
               'Ela senta encostada na porta. A lanterna desce: 15, 14, 13.',
@@ -1002,7 +1193,11 @@ function tronco(V) {
       },
 
       meiaVolta: {
-        t: 'Dar meia volta', k: 'novo', cena: [
+        t: 'Dar meia volta', k: 'novo', conversa: true, voltas: [{ sempre: true, cena: [
+          'Ela volta até a porta vermelha. Desce.',
+          'A vela. Ele não diz "voltou". Só afasta os joelhos, abrindo espaço do outro lado da chama.',
+          'F: AQUI EMBAIXO / NINGUÉM ESCREVE.',
+        ] }], cena: [
           'Ela volta até a porta vermelha deitada no chão. Desce.',
           'A vela ainda está acesa. Ele está sentado onde estava, como se ela nunca tivesse saído.',
           'F: VOLTOU.',
@@ -1041,7 +1236,7 @@ function tronco(V) {
           'O braço de garras espera junto ao "?". Ele a vê e recua.',
           'Mas não volta para a parede: recua por um corredor estreito, entre o avesso de todas as salas.',
         ], q: '?', ops: [
-          { l: 'Seguir a luz do "?"', go: 'salaDeVolta' },
+          { l: 'Seguir a luz do "?"', go: 'abrir1' },
           { l: 'Seguir o braço', n: datilografo },
         ],
       },
@@ -1053,8 +1248,13 @@ function tronco(V) {
           'Na máquina de escrever, um papel.',
           'D: VOCÊ NÃO DEVIA / TER SUBIDO / SEM LUZ.',
           'As luzes começam a apagar, uma a uma, do fundo para a cabine.',
-        ], q: '?', ops: [
-          { l: 'Correr para a cabine', go: 'elevadorDeVolta' },
+        ], volta: { cena: [
+          'O arquivo, de novo. Escuro desde a última vez.',
+          '{seguirFio}O fio da manga aponta para o mesmo corredor de estantes, mas o pacote com o nome dela não está mais lá.',
+          'Na máquina, o papel mudou:',
+          'D: ELA VOLTA / PARA LER / O QUE JÁ LEU.',
+        ] }, q: '?', ops: [
+          { l: 'Correr para a cabine', go: 'elevador' },
           { l: 'Seguir o fio', req: 'O fio vermelho (só neste ciclo)', n: {
             id: 'seguirFio', t: 'O fio puxa', k: 'novo', cena: [
               'No escuro total, o fio vermelho da manga se estica.',
@@ -1065,7 +1265,7 @@ function tronco(V) {
               'Ela repete o nome baixinho, três vezes, para não esquecer.',
               'O fio puxa de volta até a grade. A cabine.',
               'M: Ela encontrou o próprio nome.',
-            ], mem: ['Seu nome'], go: 'elevadorDeVolta' } },
+            ], mem: ['Seu nome'], go: 'elevador' } },
           { l: 'Procurar no escuro', n: {
             id: 'asCegas', t: 'Às cegas', k: 'novo', cena: [
               'Ela tateia os pacotes. As etiquetas são ásperas, escritas com força.',
@@ -1164,6 +1364,11 @@ function tronco(V) {
       deitar: 'na versão 2, deitar é dormir dentro do sono: o recomeço vira ferramenta para levar memórias.',
     },
     h: {
+      inicioVolta: [
+        'Ela volta, devagar, sem fazer barulho.',
+        '@conta: MIL E OITOCENTOS / E QUATRO.',
+        'Quando ela chega à lâmpada, o papel de parede com flores acaba numa linha reta, como se alguém tivesse parado de sonhar ali.',
+      ],
       esquerda: {
         t: 'Esquerda: o corredor morno', k: 'novo', cena: [
           'O lado que o vermelho não marca. O corredor desce, devagar.',
@@ -1208,11 +1413,7 @@ function tronco(V) {
               '@conta: MIL E OITOCENTOS / E TRÊS.',
               'O sono vem como um cobertor pesado.',
             ], fim: { t: 'recomeco', n: 'Contada no corredor', d: 'Recomeço sem morte: quem é contado dorme.' } } },
-          { l: 'Voltar', n: voltaEsquerda([
-            'Ela volta, devagar, sem fazer barulho.',
-            '@conta: MIL E OITOCENTOS / E QUATRO.',
-            'Quando ela chega à lâmpada, o papel de parede com flores acaba numa linha reta, como se alguém tivesse parado de sonhar ali.',
-          ]) },
+          { l: 'Voltar', go: 'inicio' },
         ],
       },
 
@@ -1282,7 +1483,11 @@ function tronco(V) {
           'F: NÃO ACENDA / A MANHÃ / AQUI DENTRO.',
         ], q: '?', ops: [
           { l: 'Apagar', n: {
-            t: 'Apagar', k: 'novo', cena: [
+            t: 'Apagar', k: 'novo', conversa: true, voltas: [{ sempre: true, cena: [
+              'S: click',
+              'A vela.',
+              'F: VOCÊ / SEMPRE / ACENDE / PRIMEIRO.',
+            ] }], cena: [
               'S: click',
               'A vela.',
               'F: ...OBRIGADO.',
@@ -1416,7 +1621,12 @@ function tronco(V) {
       },
 
       meiaVolta: {
-        t: 'Dar meia volta', k: 'novo', cena: [
+        t: 'Dar meia volta', k: 'novo', conversa: true, voltas: [{ sempre: true, cena: [
+          'Ela volta para a porta vermelha. Desce.',
+          'A vela. Ele está mais encolhido do que da outra vez.',
+          'F: A MANHÃ / CHEGOU PERTO / ONTEM.',
+          'F: FIQUE.',
+        ] }], cena: [
           'Ela volta para a porta vermelha. Desce.',
           'A vela. Ele, sentado.',
           'F: VOLTOU.',
@@ -1467,9 +1677,8 @@ function tronco(V) {
               'Passos descalços no chão de madeira. Passam por ela.',
               'Um peso se senta na beira de alguma coisa, como numa cama.',
               'Quando ela abre os olhos, todos os espelhos estão cobertos. Um deles respira por baixo do lençol.',
-              'Ela sai de costas. A porta dos espelhos se fecha sozinha, e a chave gira do lado de dentro.',
-              'No corredor vermelho, resta a porta nova.',
-            ], go: 'elevador' } },
+              'A porta atrás dela está aberta. O corredor vermelho.',
+            ], go: 'permanecer' } },
         ],
       },
 
@@ -1480,9 +1689,14 @@ function tronco(V) {
           'No travesseiro:',
           'B: NÃO DEITE. / EU DEITEI UMA VEZ / E ACORDEI / NO CORREDOR.',
           'S: Toc Toc',
-        ], q: '?', ops: [
+        ], volta: { cena: [
+          'O quarto de novo. O relógio de corda continua parado; o copo, vazio.',
+          'A forma no colchão ficou mais funda. Agora tem o tamanho dela.',
+          'A batida na porta começou antes de ela entrar.',
+          'S: Toc Toc',
+        ] }, q: '?', ops: [
           { l: 'Deitar na cama', go: 'deitar' },
-          { l: 'Voltar ao elevador', go: 'elevadorUltimo' },
+          { l: 'Voltar ao elevador', go: 'elevador' },
           { l: 'Dar corda no relógio', req: 'A corda', n: {
             id: 'relogio', t: 'A corda', k: 'novo', cena: [
               'A chave do fio vermelho entra no relógio como se tivesse sido feita para ele.',
@@ -1592,6 +1806,7 @@ function tronco(V) {
           'Ela fica. Veste a capa. As mãos ficam vermelhas até os pulsos.',
           'Ciclos depois, alguém acorda num corredor branco e vê na parede uma seta vermelha para cada lado.',
         ], fim: { t: 'final', n: 'A Pintora', d: 'Ela fica para guiar quem chega. As setas do começo agora são dela.' } } },
+      { l: 'Voltar ao corredor', go: 'inicio', se: '!direita' },
       { l: 'Ainda não', n: {
         id: 'aindaNao', t: 'Ainda não', k: 'novo', cena: [
           'Ela senta com eles, de costas para os canos.',
@@ -1665,6 +1880,11 @@ function tronco(V) {
       cima: 'os pacotes do arquivo são bilhetes da Pintora recolhidos.',
     },
     h: {
+      inicioVolta: [
+        'Ela volta. As setas raspadas ficam para trás.',
+        'Na parede do corredor branco, a seta vermelha da direita está mais forte do que antes, como se tivesse sido repintada agora.',
+        'A tinta ainda escorre.',
+      ],
       esquerda: {
         t: 'Esquerda: as setas raspadas', k: 'novo', cena: [
           'O lado que o vermelho não marca. Mas já marcou: nas paredes há setas vermelhas raspadas com unha, até sobrar só a sombra da tinta.',
@@ -1698,14 +1918,11 @@ function tronco(V) {
                 ].concat(REVELA), q: '?', ops: [
                   { l: 'Sair no escuro', go: 'manha' },
                   { l: 'Ficar e pintar', req: 'O traço', go: 'pintora' },
+                  { l: 'Voltar ao corredor', go: 'inicio', se: '!direita' },
                   { l: 'Ainda não', go: 'aindaNao' },
                 ] } },
             ] } },
-          { l: 'Voltar', n: voltaEsquerda([
-            'Ela volta. As setas raspadas ficam para trás.',
-            'Na parede do corredor branco, a seta vermelha da direita está mais forte do que antes, como se tivesse sido repintada agora.',
-            'A tinta ainda escorre.',
-          ]) },
+          { l: 'Voltar', go: 'inicio' },
         ],
       },
 
@@ -1774,7 +1991,13 @@ function tronco(V) {
           'Quando a luz passa por ela, palavras aparecem no ar, brancas:',
           '@luz: TÃO / POUCA.',
           '@luz: EU TROCO.',
-        ], q: '?', ops: [
+        ], volta: { cena: [
+          'A clareira de novo. O farol gira mais devagar, como se a esperasse.',
+          'Quando a luz passa por ela:',
+          '@luz: VOLTOU / COM MENOS.',
+          '{farolExtra}Uma das etiquetas que ela leu está virada para baixo agora.',
+          '{apagados}A fila de gente sem rosto passa ao longe. Ninguém estende a mão desta vez.',
+        ] }, q: '?', ops: [
           { l: 'Trocar a lanterna', n: {
             id: 'cemPorCento', t: 'Cem por cento', k: 'novo', cena: [
               'Ela estende a lanterna. Ele a pendura num galho, ao lado das outras, e escreve uma etiqueta.',
@@ -1810,6 +2033,7 @@ function tronco(V) {
                 ], go: 'setasGancho' } },
             ] } },
           { l: 'Ler as etiquetas', n: farolExtra },
+          { l: 'Voltar para a trilha', go: 'trilha' },
         ],
       },
 
@@ -1823,7 +2047,11 @@ function tronco(V) {
           'F: ELAS / SÓ ACORDAM / PRA LUZ.',
         ], q: '?', ops: [
           { l: 'Apagar', n: {
-            t: 'Apagar', k: 'novo', cena: [
+            t: 'Apagar', k: 'novo', conversa: true, voltas: [{ sempre: true, cena: [
+              'S: click',
+              'A vela.',
+              'F: VOCÊ / OLHA AS SETAS / TODA VEZ.',
+            ] }], cena: [
               'S: click',
               'A vela.',
               'F: ...',
@@ -1978,7 +2206,12 @@ function tronco(V) {
       },
 
       meiaVolta: {
-        t: 'Dar meia volta', k: 'novo', cena: [
+        t: 'Dar meia volta', k: 'novo', conversa: true, voltas: [{ sempre: true, cena: [
+          'Ela volta para a porta vermelha. Desce.',
+          'A vela. Ele está olhando as formas dormirem.',
+          'F: ELAS / LEMBRAM / DE VOCÊ.',
+          'F: DA SUA LUZ.',
+        ] }], cena: [
           'Ela volta para a porta vermelha. Desce.',
           'A vela. Ele.',
           'F: VOLTOU.',
@@ -2090,6 +2323,12 @@ function tronco(V) {
       { f: 'O Fundo', p: '[[voltar]] → Seguir a voz do Davi → [[fundo]].' },
     ],
     h: {
+      inicioVolta: [
+        '@enfermeira: Isso. Boa menina.',
+        'O linóleo verde acaba de repente, numa linha reta. Depois dela, o piso do corredor branco.',
+        'O bipe continua atrás dela, mais baixo, e some quando ela passa pela lâmpada.',
+        '@eu: Leito 4… por que leito 4?',
+      ],
       esquerda: {
         t: 'Esquerda: o corredor de hospital', k: 'novo', cena: [
           'O corredor da esquerda tem chão de linóleo verde e cheiro de álcool.',
@@ -2126,12 +2365,7 @@ function tronco(V) {
                   '@enfermeira: Eu disse que daqui você só olha.',
                 ], fim: { t: 'morte', n: 'Parada', d: 'Recomeço. Ensina: não se volta à força.' } } },
             ] } },
-          { l: 'Voltar', n: voltaEsquerda([
-            '@enfermeira: Isso. Boa menina.',
-            'O linóleo verde acaba de repente, numa linha reta. Depois dela, o piso do corredor branco.',
-            'O bipe continua atrás dela, mais baixo, e some quando ela passa pela lâmpada.',
-            '@eu: Leito 4… por que leito 4?',
-          ]) },
+          { l: 'Voltar', go: 'inicio' },
         ],
       },
 
@@ -2197,7 +2431,11 @@ function tronco(V) {
           'Nos cantos, duas Fomes vermelhas acordam com o grito.',
         ], q: '?', ops: [
           { l: 'Apagar', n: {
-            t: 'Desculpa', k: 'novo', cena: [
+            t: 'Desculpa', k: 'novo', conversa: true, voltas: [{ sempre: true, cena: [
+              'S: click',
+              '@eu: Desculpa, Tomás. De novo.',
+              'F: TU SEMPRE ACENDE. TODA VEZ. SENTA.',
+            ] }], cena: [
               'S: click',
               '@eu: Desculpa. Desculpa, eu não sabia.',
               'F: …TUDO BEM. NINGUÉM SABE. TOMÁS, PRAZER.',
@@ -2341,7 +2579,12 @@ function tronco(V) {
       },
 
       meiaVolta: {
-        t: 'Dar meia volta', k: 'novo', cena: [
+        t: 'Dar meia volta', k: 'novo', conversa: true, voltas: [{ sempre: true, cena: [
+          'Ela volta para a toca. Tomás já abriu espaço do outro lado da vela.',
+          'F: OUTRA VEZ, MENINA? VOCÊ SEMPRE VOLTA AQUI ANTES DE DECIDIR.',
+          '@eu: Você ainda não lembra o rosto dela?',
+          'F: NÃO.',
+        ] }], cena: [
           'Ela volta para a toca. Tomás está sentado junto da vela, esperando.',
           'F: VOLTOU? NINGUÉM VOLTA.',
           '@eu: Você disse que não lembra do rosto da sua filha.',
@@ -2382,6 +2625,9 @@ function tronco(V) {
    DESTINO — árvore de narrativas: leitura, navegação e edição.
    Referência de um trecho = números das opções escolhidas desde o
    início (ex.: 2.2.1 = Direita → Seguir o vermelho → Olhar para trás).
+   Um ciclo novo começa depois de "~" (ex.: 2.2.1~2.2.2). O percurso é
+   refeito pelo motor (motor.js): o que ela já viu, pegou ou conversou
+   não se oferece de novo igual.
    ============================================================ */
 'use strict';
 const $ = (s, r = document) => r.querySelector(s);
@@ -2403,6 +2649,7 @@ function prepara(ver) {
     ver.porId[nd.id] = nd; ver.porRef[ref] = nd; ver.lista.push(nd);
     (nd.ops || []).forEach((o, k) => { if (o.n) walk(o.n, ref ? ref + '.' + (k + 1) : String(k + 1), nd, o); });
   })(ver.raiz, '', null, null);
+  ver.cache = {};
   ver.lista.forEach(nd => {
     const marca = (alvo, rot) => { (ver.chegam[alvo] = ver.chegam[alvo] || []).push({ de: nd, rot }); };
     if (nd.go) marca(nd.go, 'segue');
@@ -2412,9 +2659,9 @@ function prepara(ver) {
 /* conserta para salvar: tira campos calculados (pai, ref…) */
 function limpo(nd) {
   const o = {};
-  ['id', 't', 'k', 'bat', 'cena', 'q', 'go', 'mem', 'obj', 'fim'].forEach(k => { if (nd[k] != null && nd[k] !== '' && !(Array.isArray(nd[k]) && !nd[k].length)) o[k] = clone(nd[k]); });
+  ['id', 't', 'k', 'bat', 'cena', 'q', 'go', 'mem', 'obj', 'fim', 'conversa', 'volta', 'voltas'].forEach(k => { if (nd[k] != null && nd[k] !== '' && !(Array.isArray(nd[k]) && !nd[k].length)) o[k] = clone(nd[k]); });
   if (nd.ops) o.ops = nd.ops.map(op => {
-    const r = {}; ['l', 'p', 'req', 'c', 'go'].forEach(k => { if (op[k] != null && op[k] !== '') r[k] = op[k]; });
+    const r = {}; ['l', 'p', 'req', 'se', 'c', 'go'].forEach(k => { if (op[k] != null && op[k] !== '') r[k] = op[k]; });
     if (op.n) r.n = limpo(op.n); return r;
   });
   return o;
@@ -2441,14 +2688,23 @@ VERS.m = MINHA;
 /* ---------------- estado ---------------- */
 const S = { v: '1', ref: '', editar: false, painel: 'resumo' };
 function ver() { return VERS[S.v]; }
-function atual() { return ver().porRef[S.ref] || ver().raiz; }
+/* o percurso atual, refeito pelo motor */
+function perc(v = ver(), ref = S.ref) { return v.cache[ref] || (v.cache[ref] = MOTOR.percorre(v.raiz, v.porId, ref)); }
+function atual() { const t = perc().trilha; return t[t.length - 1].nd; }
 function rotRef(nd) { return nd.ref === '' ? 'início' : nd.ref; }
+const ROMANO = n => ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][n] || String(n);
+/* "2.2.1~2.2" → "Ciclo II · 2.2" */
+function rotPerc(ref) {
+  const cs = String(ref).split('~'), ult = cs[cs.length - 1] || 'início';
+  return cs.length > 1 ? `Ciclo ${ROMANO(cs.length)} · ${ult}` : ult;
+}
+const passo = (ref, k) => ref === '' || ref.endsWith('~') ? ref + k : ref + '.' + k;
 function vaiPara(v, ref) { location.hash = '#' + v + '/' + (ref || '0'); }
 function vaiId(id) { const nd = ver().porId[id]; if (nd) vaiPara(S.v, nd.ref); }
 function leHash() {
-  const m = location.hash.match(/^#([1-9]|m)\/?([\d.]*)/);
+  const m = location.hash.match(/^#([1-9]|m)\/?([\d.~]*)/);
   if (m && VERS[m[1]]) { S.v = m[1]; S.ref = m[2] === '0' ? '' : (m[2] || ''); }
-  if (!ver().porRef[S.ref]) S.ref = '';
+  S.ref = perc().ref;
   desenha();
 }
 
@@ -2534,37 +2790,64 @@ function ramo(nd, v) {
 }
 
 function desenhaNo() {
-  const v = ver(), nd = atual();
-  /* trilha de volta */
-  const cad = []; for (let n = nd; n; n = n.pai) cad.unshift(n);
-  const trilha = cad.map((n, i) => (i ? `<span class="esc">${esc(n.via.l)}</span>` : '') + `<a href="#${v.chave}/${n.ref || '0'}" class="${n === nd ? 'aqui' : ''}">${esc(rotRef(n))}</a>`).join('<span class="sep">›</span>');
+  const v = ver(), P = perc(), E = P.E, cur = P.trilha[P.trilha.length - 1], nd = cur.nd, c = cur.c || nd;
+  /* trilha de volta: o percurso inteiro, com os ciclos marcados */
+  const trilha = P.trilha.map((t, i) => {
+    let h = '';
+    if (t.via) h += `<span class="sep">›</span><span class="esc">${esc(t.via.segue ? '…' : t.via.l)}</span>`;
+    else h += (i ? '<span class="sep">›</span>' : '') + `<span class="ciclo">Ciclo ${ROMANO(t.ciclo)}</span>`;
+    const r = t.ref.split('~').pop() || 'início';
+    return h + `<a href="#${v.chave}/${t.ref || '0'}" class="${i === P.trilha.length - 1 ? 'aqui' : ''}${t.vez ? ' de-volta' : ''}">${esc(r)}</a>`;
+  }).join('');
   let h = `<nav class="trilha" aria-label="caminho até aqui">${trilha}</nav>`;
-  h += `<header class="cab"><div class="refgrande">${v.chave === 'm' ? 'Minha' : 'V' + v.n} · <b>${esc(rotRef(nd))}</b>
+  const volta = cur.vez ? `<span class="k k-volta">${nd.conversa ? 'conversa de novo' : 'de volta'} · ${cur.vez + 1}ª vez</span>` : '';
+  h += `<header class="cab"><div class="refgrande">${v.chave === 'm' ? 'Minha' : 'V' + v.n} · <b>${esc(rotPerc(P.ref))}</b>
     <button class="mini" id="copiaRef" title="copiar a referência">copiar ref.</button></div>
-    <h1>${esc(nd.t || '(sem título)')}</h1>
-    <div class="meta">${nd.k ? `<span class="k k-${nd.k}">${KIND[nd.k] || nd.k}</span>` : ''}${nd.bat ? `<span class="bat">bateria ${esc(nd.bat)}</span>` : ''}${nd.id ? `<span class="idt">id: ${esc(nd.id)}</span>` : ''}</div></header>`;
+    <h1>${esc(c.t || '(sem título)')}</h1>
+    <div class="meta">${nd.k ? `<span class="k k-${nd.k}">${KIND[nd.k] || nd.k}</span>` : ''}${volta}${c.bat ? `<span class="bat">bateria ${esc(c.bat)}</span>` : ''}${nd.id ? `<span class="idt">id: ${esc(nd.id)}</span>` : ''}${nd.ref !== undefined && nd.ref !== P.ref ? `<a class="idt" href="#${v.chave}/${nd.ref || '0'}">na árvore: ${esc(rotRef(nd))}</a>` : ''}</div></header>`;
+  const AV = { se: 'esta opção depende de outro caminho neste ciclo', req: 'ela ainda não teria o que esta opção exige', visto: 'ela já tinha passado por aqui neste ciclo', conversado: 'essa conversa já tinha acontecido', semFim: 'o ciclo anterior não terminou' };
+  if (P.avisos.length) h += `<p class="aviso espiando">Espiando: ${P.avisos.map(a => `${a.passo ? `em ${esc(a.passo)} ` : ''}${AV[a.motivo] || a.motivo}`).join('; ')}.</p>`;
+  if (!cur.c) h += `<p class="aviso espiando">Ela já viveu este trecho e não há volta escrita para ele: no jogo, esta opção não apareceria.</p>`;
+  const conv = Object.keys(E.conversas).filter(id => v.porId[id]);
+  h += `<details class="estado"><summary>O que ela carrega e lembra</summary><ul>
+    <li><b>Ciclo:</b> ${ROMANO(E.ciclo)}</li>
+    <li><b>Objetos deste ciclo:</b> ${[...(MOTOR.viu(E, 'buraco') ? ['lanterna'] : []), ...(MOTOR.viu(E, 'chave') ? ['chave'] : []), ...E.obj].map(esc).join(', ') || '—'}</li>
+    <li><b>Memórias:</b> ${[...E.mem].map(m => '◆ ' + esc(m)).join(', ') || '—'}</li>
+    <li><b>Conversas que já aconteceram:</b> ${conv.map(id => esc(v.porId[id].t)).join(' · ') || '—'}</li></ul></details>`;
   if (S.editar && v.editavel) { $('#leitura').innerHTML = h + editor(nd); ligaEditor(nd); return; }
-  h += '<ol class="quadros">' + (nd.cena || []).map(s => quadro(s, v)).join('') + '</ol>';
-  if (nd.mem && nd.mem.length) h += `<p class="ganho">◆ Memória que atravessa o ciclo: <b>${nd.mem.map(esc).join(', ')}</b></p>`;
-  if (nd.obj && nd.obj.length) h += `<p class="ganho obj">Leva consigo: <b>${nd.obj.map(esc).join(', ')}</b></p>`;
-  if (nd.fim) h += `<div class="fim f-${nd.fim.t}"><span>${FIM[nd.fim.t][1]} ${FIM[nd.fim.t][0]}</span><b>${esc(nd.fim.n || '')}</b><p>${esc(nd.fim.d || '')}</p>
-    ${nd.fim.t !== 'final' ? `<a class="botao" href="#${v.chave}/0">Recomeçar do corredor</a>` : ''}</div>`;
-  if (nd.go) h += `<div class="segue">Segue para ${linkId(nd.go)}</div>`;
-  if (nd.ops && nd.ops.length) {
-    h += `<section class="escolha"><div class="pergunta">${esc(nd.q || '?')}</div><ol>` + nd.ops.map((o, k) => {
-      const r = nd.ref ? nd.ref + '.' + (k + 1) : String(k + 1);
-      const cond = o.req ? `<span class="cond">requer ◆ ${esc(o.req)}${o.c ? ' — ' + esc(o.c) : ''}</span>` : o.c ? `<span class="cond">${esc(o.c)}</span>` : '';
+  h += '<ol class="quadros">' + MOTOR.cena(c, E).map(s => quadro(s, v)).join('') + '</ol>';
+  if (c.mem && c.mem.length) h += `<p class="ganho">◆ Memória que atravessa o ciclo: <b>${c.mem.map(esc).join(', ')}</b></p>`;
+  if (c.obj && c.obj.length) h += `<p class="ganho obj">Leva consigo: <b>${c.obj.map(esc).join(', ')}</b></p>`;
+  if (c.fim) h += `<div class="fim f-${c.fim.t}"><span>${FIM[c.fim.t][1]} ${FIM[c.fim.t][0]}</span><b>${esc(c.fim.n || '')}</b><p>${esc(c.fim.d || '')}</p>
+    ${c.fim.t !== 'final' ? `<a class="botao" href="#${v.chave}/${P.ref}~">Começar o Ciclo ${ROMANO(E.ciclo + 1)} →</a> <a class="botao" href="#${v.chave}/0">Recomeçar do zero</a>` : `<a class="botao" href="#${v.chave}/0">Recomeçar do zero</a>`}</div>`;
+  const ss = MOTOR.saidas(c), cond = c => c.split(',').map(x => x.trim()).map(x => x[0] === '!' ? `ainda não passou por “${(v.porId[x.slice(1)] || {}).t || x.slice(1)}”` : `já passou por “${(v.porId[x] || {}).t || x}”`).join(' e ');
+  if (ss.length === 1 && ss[0].segue) {
+    const st = MOTOR.opcao(ss[0], E, v.porId);
+    h += st.ok ? `<div class="segue">Segue para <a class="ref" href="#${v.chave}/${passo(P.ref, 1)}"><b>${esc(rotRef(st.alvo))}</b> ${esc(st.alvo.t)}</a>${st.vez ? ' <span class="k k-volta">de volta</span>' : ''}</div>`
+      : `<div class="segue aviso">Segue para ${linkId(c.go)}, mas ela já viveu esse trecho e não há volta escrita.</div>`;
+  } else if (ss.length) {
+    h += `<section class="escolha"><div class="pergunta">${esc(c.q || '?')}</div><ol>` + ss.map((o, k) => {
+      const r = passo(P.ref, k + 1), num = r.split('~').pop();
+      const st = MOTOR.opcao(o, E, v.porId);
       const voto = o.p != null ? `<span class="voto">votação: ${o.p}%</span>` : '';
-      if (o.n) return `<li><a class="opt" href="#${v.chave}/${r}"><span class="num">${r}</span><span class="lbl">${esc(o.l)}</span>${cond}${voto}<span class="dest">${esc(o.n.t)} ${selos(o.n)}</span></a></li>`;
-      if (o.go) { const alvo = v.porId[o.go]; return `<li><a class="opt go" href="#${v.chave}/${alvo ? alvo.ref || '0' : ''}"><span class="num">${r}</span><span class="lbl">${esc(o.l)}</span>${cond}${voto}<span class="dest">↪ volta para ${alvo ? `<b>${esc(rotRef(alvo))}</b> ${esc(alvo.t)}` : esc(o.go) + ' (não encontrado)'}</span></a></li>`; }
-      return `<li><span class="opt travada"><span class="num">${r}</span><span class="lbl">${esc(o.l)}</span>${voto}<span class="dest">caminho ainda não escrito${v.editavel ? ' — ligue Editar para escrever' : ''}</span></span></li>`;
+      const nota = o.c ? `<span class="cond">${esc(o.c)}</span>` : '';
+      if (st.motivo === 'vazio') return `<li><span class="opt travada"><span class="num">${esc(num)}</span><span class="lbl">${esc(o.l)}</span>${voto}<span class="dest">caminho ainda não escrito${v.editavel ? ' — ligue Editar para escrever' : ''}</span></span></li>`;
+      if (!st.ok) {
+        const pq = st.motivo === 'se' ? 'só se neste ciclo ela ' + esc(cond(o.se)) : { req: `requer ◆ ${esc(o.req)}`, visto: 'já visto neste ciclo', conversado: 'essa conversa já aconteceu' }[st.motivo];
+        const espiar = st.motivo === 'se' || st.motivo === 'req' ? ` <a class="espiar" href="#${v.chave}/${r}">espiar →</a>` : '';
+        return `<li><span class="opt fechada"><span class="num">${esc(num)}</span><span class="lbl">${esc(o.l)}</span><span class="dest">${pq}${espiar}</span>${nota}</span></li>`;
+      }
+      const req = o.req ? `<span class="cond">◆ ${esc(o.req)}</span>` : '';
+      const dest = o.n ? `${esc(st.alvo.t)} ${selos(st.alvo)}${st.vez ? ' <span class="k k-volta">de volta</span>' : ''}` : `↪ ${st.vez ? 'de volta a' : 'vai para'} <b>${esc(rotRef(st.alvo))}</b> ${esc(st.alvo.t)}`;
+      return `<li><a class="opt${o.go ? ' go' : ''}" href="#${v.chave}/${r}"><span class="num">${esc(num)}</span><span class="lbl">${esc(o.l)}</span>${req}${nota}${voto}<span class="dest">${dest}</span></a></li>`;
     }).join('') + '</ol></section>';
   }
   const cheg = v.chegam[nd.id];
   if (cheg && cheg.length) h += '<p class="chegam">Também se chega aqui por: ' + cheg.map(c => `<a href="#${v.chave}/${c.de.ref || '0'}"><b>${esc(rotRef(c.de))}</b> ${esc(c.rot === 'segue' ? c.de.t : c.rot)}</a>`).join(' · ') + '</p>';
+  if (MOTOR.voltasDe(nd).length) h += `<p class="chegam">Este trecho tem ${MOTOR.voltasDe(nd).length === 1 ? 'uma versão' : MOTOR.voltasDe(nd).length + ' versões'} para quando ela ${nd.conversa ? 'já teve esta conversa' : 'passa de novo'}.</p>`;
   if (!v.editavel) h += `<p class="copiar"><button id="copiaGalho">Copiar este galho para a minha árvore</button></p>`;
   $('#leitura').innerHTML = h;
-  $('#copiaRef').onclick = () => copiaTexto(`${v.chave === 'm' ? 'Minha' : 'V' + v.n} ${rotRef(nd)} — ${nd.t}`, $('#copiaRef'));
+  $('#copiaRef').onclick = () => copiaTexto(`${v.chave === 'm' ? 'Minha' : 'V' + v.n} ${rotPerc(P.ref)} — ${c.t}`, $('#copiaRef'));
   const cg = $('#copiaGalho'); if (cg) cg.onclick = () => { localStorage.setItem(CHAVE_CLIP, JSON.stringify({ de: `V${v.n} ${rotRef(nd)}`, no: limpo(nd) })); cg.textContent = 'Copiado. Na sua árvore, use "Colar galho" numa escolha vazia.'; };
   $('#leitura').scrollTop = 0; window.scrollTo(0, 0);
 }
@@ -2584,6 +2867,12 @@ function editor(nd) {
   <label>O que acontece — um quadro por linha
     <textarea name="cena" rows="${Math.max(6, (nd.cena || []).length + 2)}">${esc((nd.cena || []).join('\n'))}</textarea></label>
   <p class="dica">Prefixos: <code>B:</code> bilhete · <code>D:</code> datilografado · <code>A:</code> bilhete do ser alto · <code>F:</code> fala vermelha · <code>M:</code> máquina de escrever · <code>S:</code> som · <code>N:</code> nota · <code>@nome:</code> outra voz. Em bilhetes e falas, <code> / </code> quebra a linha.</p>
+  <fieldset><legend>Quando ela volta</legend>
+  <label>Como fica este trecho quando ela passa de novo — um quadro por linha; separe cada passagem com uma linha só com <code>---</code>
+    <textarea name="voltas" rows="${Math.max(3, MOTOR.voltasDe(nd).reduce((n, x) => n + (x.cena || []).length + 1, 0) + 1)}" placeholder="vazio = depois da primeira vez, a opção que leva aqui fica indisponível">${esc(MOTOR.voltasDe(nd).map(x => (x.cena || []).join('\n')).join('\n---\n'))}</textarea></label>
+  <label class="caixa"><input type="checkbox" name="sempre" ${(MOTOR.voltasDe(nd).slice(-1)[0] || {}).sempre ? 'checked' : ''}> a última versão vale para todas as vezes seguintes</label>
+  <label class="caixa"><input type="checkbox" name="conversa" ${nd.conversa ? 'checked' : ''}> é uma conversa: conta entre ciclos (não se repete igual nem depois de morrer)</label>
+  <p class="dica">Um quadro que começa com <code>{id}</code> só aparece se ela já passou por esse trecho neste ciclo; <code>{!id}</code>, se ainda não passou.</p></fieldset>
   <div class="linha"><label>Memórias ganhas (vírgula) <input name="mem" value="${esc((nd.mem || []).join(', '))}"></label>
   <label>Objetos do ciclo (vírgula) <input name="obj" value="${esc((nd.obj || []).join(', '))}"></label></div>
   <fieldset><legend>Como termina</legend>
@@ -2600,7 +2889,8 @@ function editor(nd) {
     else if (o.go) dest = `↪ <select data-a="goOp" data-k="${k}">${opcoesDestino(o.go)}</select> <button data-a="desliga" data-k="${k}">desligar</button>`;
     else dest = `<button data-a="novo" data-k="${k}">Escrever este caminho</button> <button data-a="liga" data-k="${k}">Voltar a um trecho existente</button>${clip ? ` <button data-a="cola" data-k="${k}">Colar galho (${esc(JSON.parse(clip).de)})</button>` : ''}`;
     return `<li><span class="num">${r}</span><input data-f="l" data-k="${k}" value="${esc(o.l)}" placeholder="texto da opção">
-      <input data-f="req" data-k="${k}" value="${esc(o.req)}" placeholder="requer memória (opcional)" class="curto">
+      <input data-f="req" data-k="${k}" value="${esc(o.req)}" placeholder="requer memória ou objeto (opcional)" class="curto">
+      <input data-f="se" data-k="${k}" value="${esc(o.se)}" placeholder="só se passou por (ids, ! = não passou)" class="curto">
       <span class="acoes"><button data-a="sobe" data-k="${k}" title="subir">↑</button><button data-a="desce" data-k="${k}" title="descer">↓</button><button data-a="rmOp" data-k="${k}" class="perigo" title="remover a opção">✕</button></span>
       <div class="dest">${dest}</div></li>`;
   }).join('') + `</ol><button data-a="addOp">+ Adicionar escolha</button></fieldset></form>`;
@@ -2615,6 +2905,10 @@ function ligaEditor(nd) {
     nd.mem = lista(f.mem.value); nd.obj = lista(f.obj.value);
     nd.fim = f.fimT.value ? { t: f.fimT.value, n: f.fimN.value, d: f.fimD.value } : undefined;
     nd.go = f.go.value || undefined; nd.q = f.q.value || undefined;
+    const antigas = MOTOR.voltasDe(nd), blocos = f.voltas.value.split(/^\s*---\s*$/m).map(b => b.split('\n').map(x => x.trim()).filter(Boolean)).filter(b => b.length);
+    delete nd.volta; nd.voltas = blocos.length ? blocos.map((cena, i) => Object.assign({}, antigas[i], { cena })) : undefined;
+    if (nd.voltas) { nd.voltas.forEach(x => delete x.sempre); if (f.sempre.checked) nd.voltas[nd.voltas.length - 1].sempre = true; }
+    nd.conversa = f.conversa.checked || undefined;
     f.querySelectorAll('[data-f]').forEach(i => { nd.ops[+i.dataset.k][i.dataset.f] = i.value || undefined; });
     salvaMinha(); desenhaLado();
   };
