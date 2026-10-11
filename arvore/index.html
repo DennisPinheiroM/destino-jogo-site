@@ -250,8 +250,9 @@ a.opt:hover { transform: translateX(3px); box-shadow: -4px 0 0 var(--verm); }
    - Um trecho já visto neste ciclo só se repete pela sua volta
      (nd.volta ou nd.voltas[i], que trocam cena/opções/fim do original).
      Sem volta, a opção que leva a ele fica indisponível.
-   - Trechos com conversa: true contam entre ciclos: um diálogo que já
-     aconteceu só volta diferente (pela volta), nunca igual.
+   - Num ciclo novo tudo volta a ficar disponível (lugares, objetos e
+     conversas); só as memórias atravessam o ciclo. conversa: true só
+     marca o trecho como diálogo.
    - A última volta com sempre: true vale para todas as vezes seguintes.
    - Opção com req exige uma memória (de qualquer ciclo) ou um objeto
      (deste ciclo). Opção com se: 'id,!id' exige ter passado (ou não)
@@ -274,9 +275,9 @@ const MOTOR = (() => {
     return c;
   }
   function novoEstado() { return { ciclo: 1, vistos: {}, conversas: {}, mem: new Set(), obj: new Set() }; }
-  function novoCiclo(E) { E.ciclo++; E.vistos = {}; E.obj = new Set(); }
+  function novoCiclo(E) { E.ciclo++; E.vistos = {}; E.conversas = {}; E.obj = new Set(); }
   const viu = (E, id) => (E.vistos[id] || 0) > 0;
-  const vez = (E, nd) => (nd.conversa ? E.conversas[nd.id] : E.vistos[nd.id]) || 0;
+  const vez = (E, nd) => E.vistos[nd.id] || 0;
   function vale(cond, E) {
     return String(cond || '').split(',').map(s => s.trim()).filter(Boolean)
       .every(c => c[0] === '!' ? !viu(E, c.slice(1)) : viu(E, c));
@@ -314,7 +315,7 @@ const MOTOR = (() => {
     if (o.req && !E.mem.has(o.req) && !E.obj.has(o.req)) return { ok: false, motivo: 'req', alvo };
     if (!alvo) return { ok: false, motivo: 'vazio' };
     const n = vez(E, alvo);
-    if (!versao(alvo, n)) return { ok: false, motivo: alvo.conversa && !viu(E, alvo.id) ? 'conversado' : 'visto', alvo };
+    if (!versao(alvo, n)) return { ok: false, motivo: alvo.conversa ? 'conversado' : 'visto', alvo };
     return { ok: true, alvo, vez: n };
   }
   /* refaz um percurso; passos fora das regras viram avisos (modo espiar) */
@@ -2805,7 +2806,7 @@ function desenhaNo() {
     <button class="mini" id="copiaRef" title="copiar a referência">copiar ref.</button></div>
     <h1>${esc(c.t || '(sem título)')}</h1>
     <div class="meta">${nd.k ? `<span class="k k-${nd.k}">${KIND[nd.k] || nd.k}</span>` : ''}${volta}${c.bat ? `<span class="bat">bateria ${esc(c.bat)}</span>` : ''}${nd.id ? `<span class="idt">id: ${esc(nd.id)}</span>` : ''}${nd.ref !== undefined && nd.ref !== P.ref ? `<a class="idt" href="#${v.chave}/${nd.ref || '0'}">na árvore: ${esc(rotRef(nd))}</a>` : ''}</div></header>`;
-  const AV = { se: 'esta opção depende de outro caminho neste ciclo', req: 'ela ainda não teria o que esta opção exige', visto: 'ela já tinha passado por aqui neste ciclo', conversado: 'essa conversa já tinha acontecido', semFim: 'o ciclo anterior não terminou' };
+  const AV = { se: 'esta opção depende de outro caminho neste ciclo', req: 'ela ainda não teria o que esta opção exige', visto: 'ela já tinha passado por aqui neste ciclo', conversado: 'essa conversa já tinha acontecido neste ciclo', semFim: 'o ciclo anterior não terminou' };
   if (P.avisos.length) h += `<p class="aviso espiando">Espiando: ${P.avisos.map(a => `${a.passo ? `em ${esc(a.passo)} ` : ''}${AV[a.motivo] || a.motivo}`).join('; ')}.</p>`;
   if (!cur.c) h += `<p class="aviso espiando">Ela já viveu este trecho e não há volta escrita para ele: no jogo, esta opção não apareceria.</p>`;
   const conv = Object.keys(E.conversas).filter(id => v.porId[id]);
@@ -2813,7 +2814,7 @@ function desenhaNo() {
     <li><b>Ciclo:</b> ${ROMANO(E.ciclo)}</li>
     <li><b>Objetos deste ciclo:</b> ${[...(MOTOR.viu(E, 'buraco') ? ['lanterna'] : []), ...(MOTOR.viu(E, 'chave') ? ['chave'] : []), ...E.obj].map(esc).join(', ') || '—'}</li>
     <li><b>Memórias:</b> ${[...E.mem].map(m => '◆ ' + esc(m)).join(', ') || '—'}</li>
-    <li><b>Conversas que já aconteceram:</b> ${conv.map(id => esc(v.porId[id].t)).join(' · ') || '—'}</li></ul></details>`;
+    <li><b>Conversas deste ciclo:</b> ${conv.map(id => esc(v.porId[id].t)).join(' · ') || '—'}</li></ul></details>`;
   if (S.editar && v.editavel) { $('#leitura').innerHTML = h + editor(nd); ligaEditor(nd); return; }
   h += '<ol class="quadros">' + MOTOR.cena(c, E).map(s => quadro(s, v)).join('') + '</ol>';
   if (c.mem && c.mem.length) h += `<p class="ganho">◆ Memória que atravessa o ciclo: <b>${c.mem.map(esc).join(', ')}</b></p>`;
@@ -2833,7 +2834,7 @@ function desenhaNo() {
       const nota = o.c ? `<span class="cond">${esc(o.c)}</span>` : '';
       if (st.motivo === 'vazio') return `<li><span class="opt travada"><span class="num">${esc(num)}</span><span class="lbl">${esc(o.l)}</span>${voto}<span class="dest">caminho ainda não escrito${v.editavel ? ' — ligue Editar para escrever' : ''}</span></span></li>`;
       if (!st.ok) {
-        const pq = st.motivo === 'se' ? 'só se neste ciclo ela ' + esc(cond(o.se)) : { req: `requer ◆ ${esc(o.req)}`, visto: 'já visto neste ciclo', conversado: 'essa conversa já aconteceu' }[st.motivo];
+        const pq = st.motivo === 'se' ? 'só se neste ciclo ela ' + esc(cond(o.se)) : { req: `requer ◆ ${esc(o.req)}`, visto: 'já visto neste ciclo', conversado: 'essa conversa já aconteceu neste ciclo' }[st.motivo];
         const espiar = st.motivo === 'se' || st.motivo === 'req' ? ` <a class="espiar" href="#${v.chave}/${r}">espiar →</a>` : '';
         return `<li><span class="opt fechada"><span class="num">${esc(num)}</span><span class="lbl">${esc(o.l)}</span><span class="dest">${pq}${espiar}</span>${nota}</span></li>`;
       }
@@ -2871,7 +2872,7 @@ function editor(nd) {
   <label>Como fica este trecho quando ela passa de novo — um quadro por linha; separe cada passagem com uma linha só com <code>---</code>
     <textarea name="voltas" rows="${Math.max(3, MOTOR.voltasDe(nd).reduce((n, x) => n + (x.cena || []).length + 1, 0) + 1)}" placeholder="vazio = depois da primeira vez, a opção que leva aqui fica indisponível">${esc(MOTOR.voltasDe(nd).map(x => (x.cena || []).join('\n')).join('\n---\n'))}</textarea></label>
   <label class="caixa"><input type="checkbox" name="sempre" ${(MOTOR.voltasDe(nd).slice(-1)[0] || {}).sempre ? 'checked' : ''}> a última versão vale para todas as vezes seguintes</label>
-  <label class="caixa"><input type="checkbox" name="conversa" ${nd.conversa ? 'checked' : ''}> é uma conversa: conta entre ciclos (não se repete igual nem depois de morrer)</label>
+  <label class="caixa"><input type="checkbox" name="conversa" ${nd.conversa ? 'checked' : ''}> é uma conversa (não se repete no mesmo ciclo; no ciclo seguinte volta a ficar disponível)</label>
   <p class="dica">Um quadro que começa com <code>{id}</code> só aparece se ela já passou por esse trecho neste ciclo; <code>{!id}</code>, se ainda não passou.</p></fieldset>
   <div class="linha"><label>Memórias ganhas (vírgula) <input name="mem" value="${esc((nd.mem || []).join(', '))}"></label>
   <label>Objetos do ciclo (vírgula) <input name="obj" value="${esc((nd.obj || []).join(', '))}"></label></div>
