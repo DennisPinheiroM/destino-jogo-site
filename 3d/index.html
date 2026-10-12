@@ -5078,7 +5078,7 @@ function showChoice(c) {
 }
 function hideChoice() { choiceEl.hidden = true; choiceEl.innerHTML = ''; choiceEl.classList.remove('in', 'out'); }
 function pick(c, k, btn) {
-  if (G.waking || !G.ready || !btn || performance.now() - (G.choiceAt || 0) < 700) return;
+  if (G.waking || G.inv || !G.ready || !btn || performance.now() - (G.choiceAt || 0) < 700) return;
   const o = c.opts[k], st = optState(o);
   if (!st.dest) {
     btn.classList.remove('nope'); void btn.offsetWidth; btn.classList.add('nope');
@@ -5193,9 +5193,12 @@ function renderInv(sel) {
 function openInv(on) {
   if (!!G.inv === on) return;
   G.inv = on; invEl.hidden = !on; bagEl.setAttribute('aria-expanded', on);
-  if (on) { clearTimeout(G.timer); bagEl.classList.remove('nova'); renderInv(); invEl.querySelector('.close').focus(); SND.play('paper'); return; }
-  const b = beat();
-  if (G.started && G.ready && !b.choice && !b.hold && !b.end && !b.final) G.timer = setTimeout(advance, 900); // retoma de onde parou
+  if (on) { const b = beat(); if (!b.end && !b.final) clearTimeout(G.timer); bagEl.classList.remove('nova'); renderInv(); invEl.querySelector('.close').focus(); SND.play('paper'); return; }
+  if (!G.started) return;
+  const b = beat();                                                // retoma de onde parou
+  if (b.end || b.final) return;                                    // morte e final seguem sozinhos, com ou sem o bolso aberto
+  if (b.choice) { if (G.ready && !choiceEl.classList.contains('out')) { showChoice(b.choice); G.choiceAt = performance.now() - 400; } }
+  else if (G.ready && !b.hold) G.timer = setTimeout(advance, 900);
 }
 bagEl.addEventListener('click', e => { e.stopPropagation(); if (G.started) openInv(!G.inv); });
 invEl.addEventListener('click', e => {
