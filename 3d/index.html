@@ -343,13 +343,9 @@ svg.layer [class] { transform-box: view-box; transform-origin: 360px 640px; }
 #endCard .s { font-family: var(--font-type); font-size: calc(var(--u) * 3.4); opacity: .6; }
 #endCard button { margin-top: calc(var(--u) * 6); font-family: var(--font-hand); font-weight: 700; font-size: calc(var(--u) * 6); color: #fff; background: none; border: 0; cursor: pointer; opacity: .8; }
 #endCard button:hover, #endCard button:focus-visible { opacity: 1; outline: none; text-decoration: underline; }
-#resume { position: relative; padding: .1em .7em; margin-top: calc(var(--u) * 6); font-family: var(--font-hand); font-weight: 700; font-size: calc(var(--u) * 8); color: #120000; background: none; border: 0; cursor: pointer; }
-#resume small { font-family: var(--font-type); font-weight: 400; font-size: .42em; opacity: .75; }
-#resume svg { position: absolute; inset: -18% -6%; width: 112%; height: 136%; overflow: visible; pointer-events: none; }
-#resume svg path { fill: none; stroke: #120000; stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 520; stroke-dashoffset: 520; animation: draw 1.6s .6s ease forwards; }
-#resume:focus-visible { outline: 2px dashed #120000; outline-offset: 6px; }
-#resume:not([hidden]) + #begin.menor { margin-top: 0; font-size: calc(var(--u) * 4.4); opacity: .75; }
-#resume:not([hidden]) + #begin.menor svg { display: none; }
+/* o menu: no corredor, sem o que é da partida (ciclo, bolso, recomeçar) */
+#stage .hud > * { transition: opacity .8s ease; }
+#stage.menu #cycle, #stage.menu #bag, #stage.menu #restart { opacity: 0; pointer-events: none; }
 
 </style>
 <svg id="svgdefs" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -441,15 +437,6 @@ svg.layer [class] { transform-box: view-box; transform-origin: 360px 640px; }
       <button type="button" id="restart" title="Voltar ao início do ciclo">recomeçar</button>
       <button type="button" id="snd" aria-pressed="true" title="Ligar ou desligar o som"><span>som</span></button>
     </div>
-    <section id="title">
-      <div class="inner">
-        <h1>DESTINO</h1>
-        <p>Um corredor, uma escolha, depois outra. Agora em três dimensões, ainda a lápis e nanquim.</p>
-        <button type="button" id="resume" hidden>continuar <small></small><svg viewBox="0 0 200 80" preserveAspectRatio="none" aria-hidden="true"><path d="M30,12 C80,2 170,6 190,30 C204,58 140,76 80,74 C20,72 2,52 8,32 C14,16 40,8 70,8"/></svg></button>
-        <button type="button" id="begin">começar<svg viewBox="0 0 200 80" preserveAspectRatio="none" aria-hidden="true"><path d="M30,12 C80,2 170,6 190,30 C204,58 140,76 80,74 C20,72 2,52 8,32 C14,16 40,8 70,8"/></svg></button>
-        <span class="keys">toque, espaço ou → para avançar · 1–4 para escolher · mova o cursor para olhar</span>
-      </div>
-    </section>
     <section id="inv" hidden aria-label="Bolso e memórias">
       <div class="card">
         <h2>No bolso <small>só neste ciclo</small></h2>
@@ -4734,13 +4721,114 @@ const STORY = {
 };
 
 /* ============================================================
+   DESTINO 3D — o menu inicial, como uma escolha no corredor branco.
+   Cada opção é uma escolha do cartão a lápis e leva a pessoa por um
+   caminho do corredor: em frente até o vermelho (novo jogo), até o
+   fundo e à direita (continuar), até o fundo e à esquerda
+   (configurações) e, nos créditos, ela olha para trás.
+   Os trechos do menu têm raiz: true (o verificador os trata como
+   começo, como o 'inicio').
+   ============================================================ */
+'use strict';
+
+/* ---------- configurações (ficam salvas no navegador) ---------- */
+const CFG_KEY = 'destino3d.config';
+const CFG = Object.assign({ som: true, vel: 1, mov: true }, (() => { try { return JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); } catch (e) { return {}; } })());
+const VEL = [1.4, 1, .65];                                               // lento, normal, rápido: multiplica o tempo de leitura e de datilografia
+const salvarCfg = () => { try { localStorage.setItem(CFG_KEY, JSON.stringify(CFG)); } catch (e) { } };
+
+/* ---------- os créditos: bilhetes que ela encontra quando olha para trás ---------- */
+Object.assign(NOTES, {
+  cred1: D_(['DESTINO', '', 'Baseado na história', 'em quadrinhos Destino,', 'publicada em stories', '(2021–2022), em que', 'o público escolhia', 'o caminho.'], { h: 470 }),
+  cred2: B_(['Jogo e adaptação:', '', 'Dennis Pinheiro'], { h: 320, rot: 2 }),
+  cred3: D_(['Feito com Three.js.', '', 'Letras: Caveat,', 'Courier Prime,', 'Patrick Hand SC,', 'Rock Salt e', 'Shadows Into Light.'], { h: 440, rot: -1 }),
+});
+
+/* ---------- as escolhas do menu ---------- */
+const MENU_Q = { q: '?', opts: [['Novo jogo', 0, 'menuNovo'], ['Continuar', 0, 'menuContinuar', { req: 'temSave', nota: 'ainda não há o que continuar' }],
+  ['Configurações', 0, 'menuConfig'], ['Créditos', 0, 'menuCreditos']] };
+const CFG_Q = { q: '?', opts: [['Som', 0, 'cfgSom'], ['Texto', 0, 'cfgVel'], ['Movimento', 0, 'cfgMov'],
+  ['Apagar o progresso', 0, 'cfgApagar', { req: 'temSave', oculta: true }], ['Voltar', 0, 'cfgVoltar']] };
+const MENU_PAREDE = { p: [0, 1.6, 1.3], l: [0, 1.5, -10] };              // onde ela acorda: o começo do corredor
+
+Object.assign(STORY, {
+  /* o corredor branco, parado; a máquina escreve o nome do jogo */
+  menu: { raiz: true, marcas: ['temSave', 'apagarPergunta'], beats: [                                  // marcas: postas pelas ações do menu, não por quadros
+    { fx: 'menuEnter', env: 'corridor', amb: 'room', cam: Object.assign({ cut: 1 }, MENU_PAREDE), veil: { c: '#000', o: 0, d: 1600 }, type: { t: 'DESTINO', col: '#141414', y: 17 }, choiceAt: 700, choice: MENU_Q },
+  ] },
+
+  /* novo jogo: em frente, e a luz fica vermelha, como no primeiro quadro */
+  menuNovo: { raiz: true, next: 'inicio', beats: [
+    { sfx: 'steps', amb: 'none', cam: { p: [0, 1.6, -3.4], l: [0, 1.45, -10], d: 4.4, walk: 1 }, veil: { c: '#a80000', o: 1, d: 2200, delay: 2200 }, auto: 4600 },
+    { fx: 'menuNovo', auto: 200 },
+  ] },
+
+  /* continuar: até o fundo, e à direita, para o corredor vermelho; o cartão do ciclo em que ela parou */
+  menuContinuar: { raiz: true, next: 'inicio', beats: [
+    { sfx: 'steps', cam: [{ p: [0, 1.6, -7.6], l: [0, 1.45, -10], d: 4.4, walk: 1 }, { p: [.3, 1.6, -8.8], l: [10, 1.35, -8.8], d: 1.8 }], auto: 6200 },
+    { sfx: 'steps', cam: { p: [3.6, 1.6, -8.8], l: [12, 1.35, -8.8], d: 3, walk: 1 }, veil: { c: '#000', o: 1, d: 1600, delay: 1200 }, auto: 3200 },
+    { fx: 'menuContinuar', auto: 4200 },
+  ] },
+
+  /* configurações: até o fundo, e à esquerda */
+  menuConfig: { raiz: true, beats: [
+    { sfx: 'steps', cam: [{ p: [0, 1.6, -7.6], l: [0, 1.45, -10], d: 4.4, walk: 1 }, { p: [-.3, 1.6, -8.8], l: [-10, 1.35, -8.8], d: 1.8 }], auto: 6200 },
+    { fx: 'cfgLabels', cam: { p: [-1.6, 1.6, -8.8], l: [-5, 1.3, -8.8], d: 2.2, walk: 1 }, choiceAt: 1800, choice: CFG_Q },
+  ] },
+  cfgSom: { raiz: true, next: 'menuConfig', nextAt: 1, beats: [{ fx: 'cfgSom', auto: 200 }] },
+  cfgVel: { raiz: true, next: 'menuConfig', nextAt: 1, beats: [{ fx: 'cfgVel', auto: 200 }] },
+  cfgMov: { raiz: true, next: 'menuConfig', nextAt: 1, beats: [{ fx: 'cfgMov', auto: 200 }] },
+  cfgApagar: { raiz: true, next: 'menuConfig', nextAt: 1, beats: [{ fx: 'cfgApagar', sfx: 'tear', auto: 200 }] },
+  /* voltar: ela dá as costas para o fundo e anda de volta até onde acordou */
+  cfgVoltar: { raiz: true, next: 'menu', beats: [
+    { drop: 'apagarPergunta', sfx: 'steps', cam: [{ p: [-.2, 1.6, -8.8], l: [0, 1.45, 2], d: 2.2 }, { p: [0, 1.6, 1.3], l: [0, 1.5, 2.6], d: 5, walk: 1 }, { l: [4, 1.5, 1.0], d: .9 }, { l: [0, 1.5, -10], d: 1 }], auto: 9400 },
+  ] },
+
+  /* créditos: ela olha para trás, e lá estão os bilhetes */
+  menuCreditos: { raiz: true, next: 'menu', beats: [
+    { amb: 'none', sfx: 'tension', cam: [{ l: [4, 1.5, 1.0], d: 1.4, e: 'sine' }, { l: [0, 1.45, 8], d: 1.4, e: 'sine' }], auto: 3000 },
+    { note: 'cred1', sfx: 'paper', hold: true },
+    { note: 'cred2', sfx: 'paper', hold: true },
+    { note: 'cred3', sfx: 'paper', hold: true },
+    { note: 'naoOlhe', sfx: 'paper', hold: true },                                    // o último bilhete é o de sempre
+    { note: null, amb: 'room', cam: [{ l: [4, 1.5, 1.0], d: 1.1 }, { l: [0, 1.5, -10], d: 1.3 }], auto: 2600 },
+  ] },
+});
+
+/* ---------- ações do menu ---------- */
+const FX_MENU = {
+  menuEnter() { G.menu = true; stageEl.classList.add('menu'); if (!G.semSalvar) G.flags.temSave = !!temProgresso(); },
+  menuNovo() { if (!G.semSalvar) apagarSave(); novaPartida(1, []); },
+  menuContinuar() {
+    const d = lerSave() || { ciclo: 1, mem: [] }; novaPartida(d.ciclo, d.mem || []);
+    const card = $('#cycleCard'); card.querySelector('.n').textContent = 'Ciclo ' + roman(G.cycle);
+    card.hidden = false; card.classList.remove('go'); void card.offsetWidth; card.classList.add('go'); setTimeout(() => { card.hidden = true; }, 4200);
+  },
+  cfgLabels() {
+    const o = CFG_Q.opts;
+    o[0][0] = 'Som: ' + (CFG.som ? 'ligado' : 'desligado');
+    o[1][0] = 'Texto: ' + ['lento', 'normal', 'rápido'][CFG.vel];
+    o[2][0] = 'Movimento: ' + (CFG.mov ? 'completo' : 'reduzido');
+    o[3][0] = G.flags.apagarPergunta ? 'Apagar mesmo? O ciclo e as memórias somem' : 'Apagar o progresso';
+  },
+  cfgSom() { CFG.som = !CFG.som; salvarCfg(); aplicarCfg(); },
+  cfgVel() { CFG.vel = (CFG.vel + 1) % 3; salvarCfg(); },
+  cfgMov() { CFG.mov = !CFG.mov; salvarCfg(); aplicarCfg(); },
+  cfgApagar() {
+    if (!G.flags.apagarPergunta) { G.flags.apagarPergunta = true; return; }   // a primeira vez só pergunta
+    apagarSave(); delete G.flags.apagarPergunta; delete G.flags.temSave;
+  },
+};
+
+/* ============================================================
    DESTINO 3D — direção: câmera, ações, sobreposições e roteiro
    ============================================================ */
 'use strict';
 const $ = s => document.querySelector(s);
 const typeEl = $('#type'), sayEl = $('#say'), hintEl = $('#hint'), choiceEl = $('#choice'), stageEl = $('#stage'),
   cycleEl = $('#cycle'), veilEl = $('#veil'), blobEl = $('#blob'), hudEl = $('#hud3d'), noteEl = $('#note'), reachEl = $('#reach');
-const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const reduceSys = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let reduce = reduceSys;                                            // o sistema pede, ou ela escolheu "Movimento: reduzido"
 const G = { node: 'inicio', i: 0, cycle: 1, ready: false, typing: null, timer: null, started: false, torch: false, hudDim: 0, shake: 0, hudKey: '', cnt: {}, hist: [] };
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 const roman = n => ROMAN[n] || String(n);
@@ -5029,7 +5117,7 @@ const FX = {
   twoDoors() { OBJ.newDoor.visible = true; },
   resetWorld,
 };
-Object.assign(FX, FX_PORTAS, FX_V12);
+Object.assign(FX, FX_PORTAS, FX_V12, FX_MENU);
 function dropPaper(from, to, keep) {
   const p = OBJ.paper; p.visible = true; p.userData.keep = keep; p.position.copy(from);
   tween({ dur: 2.5, ease: 'sine', on: (k, raw) => {
@@ -5066,9 +5154,9 @@ function typeText(spec) {
       k++; span.textContent = full.slice(0, k);
       if (full[k - 1] && full[k - 1] !== ' ') SND.play('type');
       if (k >= full.length) { G.typing = null; res(); return; }
-      fin.t = setTimeout(step, 55 + Math.random() * 40);
+      fin.t = setTimeout(step, (55 + Math.random() * 40) * VEL[CFG.vel]);
     };
-    fin.t = setTimeout(step, 600); G.typing = fin;
+    fin.t = setTimeout(step, 600 * VEL[CFG.vel]); G.typing = fin;
   });
 }
 function showSay(spec) {
@@ -5139,7 +5227,7 @@ function autoTime(b) {
   if (b.note && NOTES[b.note]) txt += noteOf(b.note).lines.map(l => typeof l === 'string' ? l : l.t).join(' ');
   const cam = [].concat(b.cam || []).reduce((s, c) => s + (c.cut ? 0 : (c.d || 2)), 0) * 1000;
   const read = txt ? 2000 + txt.length * 70 : (b.type ? 2600 : 2400);
-  return Math.max(read, cam + 400);
+  return Math.max(read * VEL[CFG.vel], cam + 400);                  // a velocidade do texto não apressa a câmera
 }
 
 function advance() {
@@ -5198,7 +5286,7 @@ const tem = x => x[0] === '!' ? !tem(x.slice(1)) : !!(G.mem[x] || (G.flags && G.
 function optState(o) {
   const ex = typeof o[3] === 'string' ? { feito: o[3] } : (o[3] || {});
   if (ex.feito && G.flags && G.flags[ex.feito]) return { why: 'feito' };
-  if (String(ex.req || '').split(',').map(x => x.trim()).filter(Boolean).some(x => !tem(x))) return { why: 'req', hide: !!ex.oculta };
+  if (String(ex.req || '').split(',').map(x => x.trim()).filter(Boolean).some(x => !tem(x))) return { why: 'req', hide: !!ex.oculta, nota: ex.nota };
   const dest = routeFor(o[2]);
   if (!dest) return { why: JSON.stringify(o[2] || '').includes('"vez"') ? 'visto' : 'vazio' };
   return { dest };
@@ -5218,13 +5306,13 @@ function showChoice(c) {
   const opts = vis.map(({ o, k, st }) => {
     const label = o[0], open = !!st.dest, cls = open ? 'open' : st.why === 'feito' || st.why === 'visto' ? 'locked used' : 'locked';
     return `<li><button type="button" id="opt-${G.node}-${k}" class="opt ${cls}" data-k="${k}" ${open ? '' : 'aria-disabled="true"'}
-      aria-label="${label.replace(/<[^>]+>/g, ' ')}${open ? '' : ' — ' + WHY[st.why][0]}">
+      aria-label="${label.replace(/<[^>]+>/g, ' ')}${open ? '' : ' — ' + (st.nota || WHY[st.why][0])}">
       ${BOX}<span class="lbl">${label}</span>
       ${open ? '<svg class="under" viewBox="0 0 200 10" preserveAspectRatio="none" aria-hidden="true"><path d="M2,6 C50,3 120,8 198,4"/></svg>' : ''}
     </button></li>`;
   }).join('');
-  const whys = vis.map(x => x.st.why).filter(Boolean), first = ['vazio', 'req', 'feito', 'visto'].find(w => whys.includes(w));
-  const foot = first ? WHY[first][1] : '';
+  const whys = vis.map(x => x.st.why).filter(Boolean), first = ['vazio', 'req', 'feito', 'visto'].find(w => whys.includes(w)), nota = vis.map(x => x.st.nota).find(Boolean);
+  const foot = nota || (first ? WHY[first][1] : '');
   choiceEl.innerHTML = `<div class="q">${c.q}</div><ol>${opts}</ol><p class="foot" aria-live="polite">${foot}</p>`;
   choiceEl.hidden = false;
   choiceEl.classList.remove('in', 'out'); void choiceEl.offsetWidth; choiceEl.classList.add('in');
@@ -5237,7 +5325,7 @@ function pick(c, k, btn) {
   const o = c.opts[k], st = optState(o);
   if (!st.dest) {
     btn.classList.remove('nope'); void btn.offsetWidth; btn.classList.add('nope');
-    const f = choiceEl.querySelector('.foot'); f.textContent = WHY[st.why][2]; f.classList.add('warn');
+    const f = choiceEl.querySelector('.foot'); f.textContent = st.nota || WHY[st.why][2]; f.classList.add('warn');
     SND.play('paper'); return;
   }
   G.ready = false;
@@ -5254,17 +5342,17 @@ stageEl.addEventListener('click', e => { if (e.target.closest('#choice') || e.ta
 stageEl.addEventListener('pointermove', e => { const r = stageEl.getBoundingClientRect(); MOUSE.tx = ((e.clientX - r.left) / r.width - .5) * 2; MOUSE.ty = ((e.clientY - r.top) / r.height - .5) * 2; });
 stageEl.addEventListener('pointerleave', () => { MOUSE.tx = MOUSE.ty = 0; });
 document.addEventListener('keydown', e => {
-  if (!G.started) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const d = !G.semSalvar && lerSave(); if (d) continuar(d); else start(); } return; }
+  if (!G.started) return;
   if (e.key === 'Escape' && G.inv) { openInv(false); return; }
-  if (e.key === 'b' || e.key === 'B') { openInv(!G.inv); return; }
+  if ((e.key === 'b' || e.key === 'B') && !G.menu) { openInv(!G.inv); return; }
   if (G.inv) return;
   if (e.target.closest && e.target.closest('.opt') && (e.key === 'Enter' || e.key === ' ')) return;
   if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); advance(); }
   const n = parseInt(e.key, 10), b = beat();
   if (n && b.choice && !choiceEl.hidden && G.vis && G.vis[n - 1] != null) pick(b.choice, G.vis[n - 1], choiceEl.querySelector(`[data-k="${G.vis[n - 1]}"]`));
 });
-$('#snd').addEventListener('click', e => { e.stopPropagation(); SND.init(); const on = SND.toggle(); e.currentTarget.setAttribute('aria-pressed', on); });
-$('#restart').addEventListener('click', e => { e.stopPropagation(); if (!G.started) return; clearTimeout(G.timer); if (G.typing) G.typing.finish(); resetWorld(); G.flags = {}; G.cnt = {}; G.hist = []; printMark(false); openInv(false); goNode('inicio'); });
+$('#snd').addEventListener('click', e => { e.stopPropagation(); SND.init(); CFG.som = SND.toggle(); salvarCfg(); e.currentTarget.setAttribute('aria-pressed', CFG.som); });
+$('#restart').addEventListener('click', e => { e.stopPropagation(); if (!G.started || G.menu) return; clearTimeout(G.timer); if (G.typing) G.typing.finish(); resetWorld(); G.flags = {}; G.cnt = {}; G.hist = []; printMark(false); openInv(false); goNode('inicio'); });
 /* ---------------- progresso salvo: o ciclo e as memórias (o que atravessa os ciclos) ----------------
    Um ciclo interrompido recomeça do corredor, como depois de uma morte; o que estava só no bolso se perde. */
 const SAVE_KEY = 'destino3d.progresso';
@@ -5277,19 +5365,34 @@ function lerSave() {
   return null;
 }
 function apagarSave() { if (G.semSalvar) return; try { localStorage.removeItem(SAVE_KEY); } catch (e) { } }
-function continuar(d) {
-  G.cycle = d.ciclo; cycleEl.querySelector('b').textContent = roman(G.cycle);
-  (d.mem || []).forEach(m => { G.mem[m] = true; });
-  renderInv(); start();
+/* há o que continuar: um ciclo depois do primeiro, ou alguma memória */
+function temProgresso() { const d = lerSave(); return d && (d.ciclo > 1 || (d.mem || []).length) ? d : null; }
+/* começa uma partida no ciclo e com as memórias dados (novo jogo: 1 e nada) */
+function novaPartida(ciclo, mem) {
+  clearTimeout(G.timer); if (G.typing) G.typing.finish();
+  resetWorld(); Object.keys(G.mem).forEach(k => { delete G.mem[k]; }); mem.forEach(m => { G.mem[m] = true; });
+  G.cycle = ciclo; cycleEl.querySelector('b').textContent = roman(ciclo);
+  G.flags = {}; G.cnt = {}; G.hist = []; printMark(false);
+  G.menu = false; stageEl.classList.remove('menu'); renderInv();
 }
-function start() {
-  if (G.started) return;
-  G.started = true; SND.init(); if (SND.ctx && SND.ctx.state === 'suspended') SND.ctx.resume();
-  $('#title').classList.add('gone'); setTimeout(() => $('#title').hidden = true, 900);
-  play();
+/* o menu é um trecho do roteiro (menu3d.js): o cartão de escolhas no corredor branco */
+function abrirMenu() {
+  clearTimeout(G.timer); if (G.typing) G.typing.finish(); openInv(false);
+  resetWorld(); G.flags = {}; G.cnt = {}; G.hist = []; printMark(false);
+  G.started = true; G.menu = true; stageEl.classList.add('menu'); goNode('menu');
 }
-$('#begin').addEventListener('click', e => { e.stopPropagation(); if (!G.semSalvar) apagarSave(); start(); });
-$('#resume').addEventListener('click', e => { e.stopPropagation(); const d = lerSave(); if (d) continuar(d); else start(); });
+function aplicarCfg() {
+  reduce = reduceSys || !CFG.mov;
+  if (SND.on !== CFG.som) SND.toggle();
+  $('#snd').setAttribute('aria-pressed', CFG.som);
+}
+/* o som só pode começar depois do primeiro toque ou tecla */
+function liberarSom() {
+  if (SND.ctx) return;
+  SND.init(); if (SND.ctx && SND.ctx.state === 'suspended') SND.ctx.resume();
+  const b = beat(); if (b && b.amb) SND.ambience(b.amb); else SND.ambience('room');
+}
+['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, liberarSom, { capture: true }));
 
 /* teste: aplica o caminho inteiro até um ponto, sem esperar */
 function flushTweens() { let n = 0; while (tweens.length && n++ < 500) { const o = tweens.shift(); o.on(1, 1); o.done && o.done(); } }
@@ -5344,7 +5447,7 @@ $('#again').addEventListener('click', e => {
   e.stopPropagation(); $('#endCard').hidden = true;
   Object.keys(G.mem).forEach(k => { delete G.mem[k]; });
   G.cycle = 1; cycleEl.querySelector('b').textContent = roman(1); apagarSave();
-  clearTimeout(G.timer); resetWorld(); G.flags = {}; G.cnt = {}; G.hist = []; printMark(false); renderInv(); goNode('inicio');
+  renderInv(); abrirMenu();                                         // depois de um final, de volta ao menu
 });
 
 /* ---------------- bolso e memórias ---------------- */
@@ -5374,7 +5477,7 @@ function openInv(on) {
   if (b.choice) { if (G.ready && !choiceEl.classList.contains('out')) { showChoice(b.choice); G.choiceAt = performance.now() - 400; } }
   else if (G.ready && !b.hold) G.timer = setTimeout(advance, 900);
 }
-bagEl.addEventListener('click', e => { e.stopPropagation(); if (G.started) openInv(!G.inv); });
+bagEl.addEventListener('click', e => { e.stopPropagation(); if (G.started && !G.menu) openInv(!G.inv); });
 invEl.addEventListener('click', e => {
   e.stopPropagation();
   const it = e.target.closest('.it');
@@ -5419,13 +5522,10 @@ function fit() { const r = stageEl.getBoundingClientRect(); resize3d(Math.max(1,
     setVeil({ c: '#a80000', o: 0, d: 0 });
     const q = new URLSearchParams(location.search);
     G.semSalvar = ['n', 'c', 'm'].some(k => q.has(k));                // endereço de teste: não lê nem grava o progresso
-    const sv = !G.semSalvar && lerSave();
-    if (sv && (sv.ciclo > 1 || sv.mem.length)) {
-      const r = $('#resume'); r.hidden = false; r.querySelector('small').textContent = `ciclo ${roman(sv.ciclo)}`;
-      $('#begin').firstChild.textContent = 'começar de novo'; $('#begin').classList.add('menor');
-    }
+    aplicarCfg();
     if (q.get('c')) { G.cycle = +q.get('c'); cycleEl.querySelector('b').textContent = roman(G.cycle); }
-    if (q.get('n') && STORY[q.get('n')]) { G.started = true; $('#title').hidden = true; seek(q.get('n'), +(q.get('i') || 0)); play(); }
+    if (q.get('n') && STORY[q.get('n')]) { G.started = true; seek(q.get('n'), +(q.get('i') || 0)); play(); }
+    else abrirMenu();
     requestAnimationFrame(frame);
   };
   const fonts = ['"Patrick Hand SC"', '"Courier Prime"', '"Caveat"', '"Shadows Into Light"', '"Rock Salt"'].map(f => document.fonts ? document.fonts.load(`40px ${f}`).catch(() => { }) : null);
