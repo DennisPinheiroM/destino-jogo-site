@@ -346,6 +346,15 @@ svg.layer [class] { transform-box: view-box; transform-origin: 360px 640px; }
 /* o menu: no corredor, sem o que é da partida (ciclo, bolso, recomeçar) */
 #stage .hud > * { transition: opacity .8s ease; }
 #stage.menu #cycle, #stage.menu #bag, #stage.menu #restart { opacity: 0; pointer-events: none; }
+/* aviso de memória: um papelzinho sob o bolso, com o nome do que ela passou a lembrar */
+#memAviso { position: absolute; right: calc(var(--u) * 4); top: calc(var(--u) * 12); z-index: 5; pointer-events: none;
+  background: var(--paper); color: var(--graphite); padding: calc(var(--u) * 1.6) calc(var(--u) * 3.2) calc(var(--u) * 1.8);
+  transform: rotate(1.6deg); box-shadow: 0 .6em 1.4em rgba(0, 0, 0, .45); text-align: right; max-width: 60%; }
+#memAviso small { display: block; font-family: var(--font-type); font-size: calc(var(--u) * 2.6); opacity: .6; letter-spacing: .04em; }
+#memAviso b { display: block; font-family: var(--font-letter); font-weight: 400; font-size: calc(var(--u) * 5.4); line-height: 1.05; }
+#memAviso.go { animation: memAviso 3.8s ease both; }
+@keyframes memAviso { 0% { opacity: 0; transform: translateY(-.8em) rotate(-2deg); } 12%, 82% { opacity: 1; transform: rotate(1.6deg); } 100% { opacity: 0; transform: translateY(.3em) rotate(3deg); } }
+@media (prefers-reduced-motion: reduce) { @keyframes memAviso { 0%, 100% { opacity: 0; } 12%, 82% { opacity: 1; } } }
 
 </style>
 <svg id="svgdefs" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -448,6 +457,7 @@ svg.layer [class] { transform-box: view-box; transform-origin: 360px 640px; }
       </div>
     </section>
     <div id="endCard" hidden><div class="t">fim</div><div class="n"></div><div class="s"></div><button type="button" id="again">começar de novo</button></div>
+    <div id="memAviso" role="status" aria-live="polite" hidden><small>nova memória</small><b></b></div>
     <div id="cycleCard" hidden><div class="n">Ciclo II</div><div class="s">o destino está em suas mãos</div></div>
   </main>
 </div>
@@ -5455,7 +5465,18 @@ const invEl = $('#inv'), bagEl = $('#bag');
 function gainMem(m) {
   if (G.mem[m]) return;
   G.mem[m] = true; salvar();
-  if (ITENS.mem[m]) { bagEl.classList.remove('nova'); void bagEl.offsetWidth; bagEl.classList.add('nova'); }
+  if (ITENS.mem[m]) { bagEl.classList.remove('nova'); void bagEl.offsetWidth; bagEl.classList.add('nova'); avisarMem(ITENS.mem[m].nome); }
+}
+/* o aviso de memória nova: um papelzinho com o nome; se vierem duas juntas, uma depois da outra */
+const memFila = [];
+function avisarMem(nome) {
+  memFila.push(nome); if (memFila.length === 1) mostrarMem();
+}
+function mostrarMem() {
+  const el = $('#memAviso'); el.querySelector('b').textContent = memFila[0];
+  el.hidden = false; el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+  setTimeout(() => SND.play('paper'), 200);
+  setTimeout(() => { memFila.shift(); el.hidden = true; el.classList.remove('go'); if (memFila.length) mostrarMem(); }, 3800);
 }
 function renderInv(sel) {
   const objs = ITENS.obj.filter(o => o.has()), mems = Object.keys(ITENS.mem).filter(k => G.mem[k]);
