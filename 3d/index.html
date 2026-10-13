@@ -343,6 +343,13 @@ svg.layer [class] { transform-box: view-box; transform-origin: 360px 640px; }
 #endCard .s { font-family: var(--font-type); font-size: calc(var(--u) * 3.4); opacity: .6; }
 #endCard button { margin-top: calc(var(--u) * 6); font-family: var(--font-hand); font-weight: 700; font-size: calc(var(--u) * 6); color: #fff; background: none; border: 0; cursor: pointer; opacity: .8; }
 #endCard button:hover, #endCard button:focus-visible { opacity: 1; outline: none; text-decoration: underline; }
+#resume { position: relative; padding: .1em .7em; margin-top: calc(var(--u) * 6); font-family: var(--font-hand); font-weight: 700; font-size: calc(var(--u) * 8); color: #120000; background: none; border: 0; cursor: pointer; }
+#resume small { font-family: var(--font-type); font-weight: 400; font-size: .42em; opacity: .75; }
+#resume svg { position: absolute; inset: -18% -6%; width: 112%; height: 136%; overflow: visible; pointer-events: none; }
+#resume svg path { fill: none; stroke: #120000; stroke-width: 2.6; stroke-linecap: round; stroke-dasharray: 520; stroke-dashoffset: 520; animation: draw 1.6s .6s ease forwards; }
+#resume:focus-visible { outline: 2px dashed #120000; outline-offset: 6px; }
+#resume:not([hidden]) + #begin.menor { margin-top: 0; font-size: calc(var(--u) * 4.4); opacity: .75; }
+#resume:not([hidden]) + #begin.menor svg { display: none; }
 
 </style>
 <svg id="svgdefs" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -438,6 +445,7 @@ svg.layer [class] { transform-box: view-box; transform-origin: 360px 640px; }
       <div class="inner">
         <h1>DESTINO</h1>
         <p>Um corredor, uma escolha, depois outra. Agora em três dimensões, ainda a lápis e nanquim.</p>
+        <button type="button" id="resume" hidden>continuar <small></small><svg viewBox="0 0 200 80" preserveAspectRatio="none" aria-hidden="true"><path d="M30,12 C80,2 170,6 190,30 C204,58 140,76 80,74 C20,72 2,52 8,32 C14,16 40,8 70,8"/></svg></button>
         <button type="button" id="begin">começar<svg viewBox="0 0 200 80" preserveAspectRatio="none" aria-hidden="true"><path d="M30,12 C80,2 170,6 190,30 C204,58 140,76 80,74 C20,72 2,52 8,32 C14,16 40,8 70,8"/></svg></button>
         <span class="keys">toque, espaço ou → para avançar · 1–4 para escolher · mova o cursor para olhar</span>
       </div>
@@ -2611,8 +2619,9 @@ function buildPortas() {
   // lençóis: sobre os espelhos laterais; o do fundo está caído no chão
   const sheetM = M(0xe2e2de, { map: TEX.sheet });
   const sheet = (x, z, ry) => { const s = new T3.Group(); s.position.set(x, 0, z); s.rotation.y = ry; MR.add(s); box(1.14, 2.05, .05, sheetM, 0, 1.24, 0, s); box(1.2, .14, .12, sheetM, 0, 2.3, .03, s); return s; };
-  sheet(-1.95, -1.2, Math.PI / 2); sheet(-1.95, 1.0, Math.PI / 2); sheet(1.95, 1.25, -Math.PI / 2);
-  OBJ.sheetRight = sheet(1.95, -.9, -Math.PI / 2);
+  OBJ.sideSheets = [sheet(-1.95, -1.2, Math.PI / 2), sheet(-1.95, 1.0, Math.PI / 2), sheet(1.95, 1.25, -Math.PI / 2)];
+  OBJ.sheetRight = sheet(1.95, -.9, -Math.PI / 2); OBJ.sideSheets.push(OBJ.sheetRight);
+  [[-1.985, -1.2, Math.PI / 2], [-1.985, 1.0, Math.PI / 2], [1.985, 1.25, -Math.PI / 2]].forEach(([x, z, ry]) => plane(1, 1.9, M(0x5d6162), x, 1.25, z, 0, ry, MR));   // vidro escuro dos espelhos sem reflexo construído
   OBJ.sheetBack = sheet(0, -2.44, 0); OBJ.sheetBack.visible = false;
   OBJ.sheetFloor = ball(.4, sheetM, .55, .06, -2.0, 1.3, .16, .9, MR);
   OBJ.sheetFloor2 = ball(.4, sheetM, 1.65, .06, -.9, .9, .16, 1.3, MR); OBJ.sheetFloor2.visible = false;
@@ -2655,11 +2664,11 @@ function buildPortas() {
     for (let i = 0; i < 8; i++) { box(.01, .2, .01, dk, i * .15 + .075, .6, 0, gr).rotation.z = .6; box(.01, .2, .01, dk, i * .15 + .075, 1.6, 0, gr).rotation.z = -.6; }
     const pn = new T3.Group(); pn.position.set(.69, 1.3, .3); pn.rotation.y = -Math.PI / 2; g.add(pn);   // três botões sem número
     box(.14, .42, .02, M(0x8a8a86), 0, 0, 0, pn);
-    [.12, 0, -.12].forEach(y => { const b = new T3.Mesh(new T3.CylinderGeometry(.026, .026, .02, 14), M(0xe8e8e2)); b.rotation.x = Math.PI / 2; b.position.set(0, y, .02); pn.add(b); });
+    const btns = [.12, 0, -.12].map(y => { const b = new T3.Mesh(new T3.CylinderGeometry(.026, .026, .02, 14), M(0xe8e8e2)); b.rotation.x = Math.PI / 2; b.position.set(0, y, .02); pn.add(b); return b; });
     plane(.07, .07, decal(TEX.smudge), .005, -.125, .032, 0, 0, pn);                           // o de baixo tem dedo vermelho
     ball(.045, MB(0xffffff), 0, 2.33, 0, 1, 1.2, 1, g);
     const L = new T3.PointLight(0xfff4e8, .8, 3.4, 1.6); L.position.set(0, 2.1, 0); g.add(L);
-    return { g, grate: gr, light: L };
+    return { g, grate: gr, light: L, btns };
   };
   const EL = new T3.Group(); EL.position.set(240, 0, 0); scene.add(EL); PLACE.elevator = EL;
   { const wm = M(0x4e4e4c, { map: TEX.plaster });
@@ -2767,6 +2776,17 @@ const FX_PORTAS = {
     OBJ.sheetFloor.visible = false; const s = OBJ.sheetBack; s.visible = true;
     tween({ dur: 1.1, ease: 'out', on: k => { s.scale.y = Math.max(.02, k); s.position.y = 2.36 * (1 - k); } });
   },
+  // todos os lençóis caem, e em nenhum espelho há ninguém; depois sobem, puxados por cima
+  sheetsDrop() {
+    OBJ.sideSheets.forEach((s, i) => tween({ delay: i * .18, dur: .7, ease: 'in', on: k => { s.scale.y = Math.max(.05, 1 - k); s.position.y = -k * .1; } }));
+    const b = OBJ.sheetBack; tween({ delay: .5, dur: .7, ease: 'in', on: k => { b.scale.y = Math.max(.02, 1 - k); } });
+  },
+  sheetsRise() {
+    OBJ.sideSheets.forEach((s, i) => tween({ delay: i * .25, dur: 1.6, ease: 'io', on: k => { s.scale.y = Math.max(.05, k); s.position.y = -.1 * (1 - k); } }));
+    const b = OBJ.sheetBack; b.visible = false; b.scale.y = 1; b.position.y = 0; OBJ.sheetFloor.visible = true;
+  },
+  // o botão de baixo: ela aperta e ele não afunda
+  btnStuck() { const b = CAB.elev.btns[2]; [0, .35].forEach(t => tween({ delay: t, dur: .18, ease: 'lin', on: k => { b.position.z = .02 - Math.sin(k * Math.PI) * .0015; } })); },
   sheetFall() {
     const s = OBJ.sheetRight;
     tween({ dur: .7, ease: 'in', on: k => { s.scale.y = Math.max(.05, 1 - k); s.position.y = -k * .1; s.rotation.z = k * .2; }, done: () => { s.visible = false; OBJ.sheetFloor2.visible = true; } });
@@ -2826,7 +2846,7 @@ function resetPortas() {
   OBJ.oldDoor.visible = OBJ.oldKnob.visible = true; OBJ.oldLeaf.visible = OBJ.oldDark.visible = false; OBJ.oldLeaf.rotation.y = 0;
   OBJ.newDoorParts.forEach(p => { p.visible = true; }); OBJ.newLeaf.visible = OBJ.newDark.visible = false; OBJ.newLeaf.rotation.y = 0;
   OBJ.sheetFloor.visible = true; OBJ.sheetBack.visible = false; OBJ.sheetBack.scale.y = 1; OBJ.sheetBack.position.y = 0;
-  const s = OBJ.sheetRight; s.visible = true; s.scale.y = 1; s.position.y = 0; s.rotation.z = 0; OBJ.sheetFloor2.visible = false;
+  OBJ.sideSheets.forEach(s => { s.visible = true; s.scale.y = 1; s.position.y = 0; s.rotation.z = 0; }); OBJ.sheetFloor2.visible = false;
   OBJ.double.visible = false; OBJ.double.position.set(4.0, 0, -.9); OBJ.double.rotation.z = 0;
   OBJ.mirLamp.intensity = 1.1; OBJ.mirLamp1.intensity = .9; OBJ.mirHoles.visible = false; OBJ.glassBack.material.opacity = .08; OBJ.glassBack.scale.set(1, 1, 1);
   OBJ.avQ.scale.setScalar(1);
@@ -3094,6 +3114,40 @@ function buildV12() {
   [-.02, .005, .03].forEach(x => box(.006, .03, .006, redB, x, 1.79, .325, ST));
   OBJ.standStitch = ST.children[ST.children.length - 1];
   box(.003, .07, .003, M(0xdadad6), .25, .95, .12, ST);
+  /* a cortina: folhas costuradas de chão a teto, fechando o canto dela enquanto ela não pode ser vista */
+  TEX.curtain = ctex(256, 512, (x, w, h) => {
+    x.fillStyle = '#d4d2ca'; x.fillRect(0, 0, w, h);
+    const cw = 58, ch = 80;
+    for (let r = -1; r * ch < h + ch; r++) for (let c = -1; c * cw < w + cw; c++) {
+      const sw = cw * R(.95, 1.25), sh = ch * R(.95, 1.2), v = R(206, 236) | 0;
+      x.save(); x.translate(c * cw + (r % 2 ? 26 : 0) + R(-6, 6), r * ch + R(-6, 6)); x.rotate(R(-.07, .07));
+      x.fillStyle = `rgb(${v},${v - 2},${v - 9})`; x.fillRect(0, 0, sw, sh);
+      x.strokeStyle = 'rgba(50,50,46,.35)'; x.lineWidth = 1.2; x.strokeRect(0, 0, sw, sh);
+      x.strokeStyle = '#a8130c'; x.lineWidth = 2;
+      for (let i = 5; i < sw - 4; i += R(11, 17)) { x.beginPath(); x.moveTo(i, sh - 5); x.lineTo(i + 3, sh + 2); x.stroke(); }
+      if (R(0, 1) > .5) for (let j = 6; j < sh - 4; j += R(12, 18)) { x.beginPath(); x.moveTo(sw - 4, j); x.lineTo(sw + 3, j + 3); x.stroke(); }
+      x.restore();
+    }
+  });
+  TEX.curtainSide = TEX.curtain.clone(); TEX.curtainSide.needsUpdate = true; TEX.curtainSide.wrapS = T3.RepeatWrapping; TEX.curtainSide.repeat.set(.45, 1);
+  { const cm = M(0xffffff, { map: TEX.curtain, side: T3.DoubleSide }), csm = M(0xffffff, { map: TEX.curtainSide, side: T3.DoubleSide });
+    const CT = new T3.Group(); GC.add(CT); OBJ.curtain = CT;
+    const CF = new T3.Group(); CF.position.set(.3, 1.3, -6.95); CF.rotation.y = -Math.PI / 2; CT.add(CF); OBJ.curtainFront = CF;
+    for (let i = 0; i < 6; i++) {                                                                 // seis tiras, cada uma um pouco virada: as dobras
+      const t = TEX.curtain.clone(); t.needsUpdate = true; t.repeat.set(1 / 6, 1); t.offset.set(i / 6, 0);
+      const st = plane(.345, 2.6, M(0xffffff, { map: t, side: T3.DoubleSide }), -1 + (i + .5) / 3, 0, i % 2 ? .018 : -.018, 0, i % 2 ? .11 : -.11, CF);
+      st.position.y = -R(0, .03);
+    }
+    plane(.9, 2.6, csm, .75, 1.3, -5.95, 0, .04, CT); plane(.9, 2.6, csm, .75, 1.3, -7.95, 0, -.03, CT);
+    const BG = new T3.Group(); BG.position.set(.3, 0, -6.9); CT.add(BG); OBJ.curtainBulge = BG;   // alguém de pé, encostado do outro lado: cabeça e ombros
+    ball(.12, cm, 0, 1.6, 0, 1, 1.15, 1, BG); ball(.26, cm, 0, 1.18, 0, 1, 1.2, 1.15, BG);
+    OBJ.curtainNeedle = box(.075, .004, .004, M(0xdadad6), .33, 1.12, -6.9, CT);              // a ponta da agulha, atravessando o papel
+    OBJ.curtainThread = new T3.Mesh(new T3.TubeGeometry(new T3.CatmullRomCurve3([v3(.29, .62, -7.25), v3(.24, .2, -7.1), v3(.12, .02, -6.6), v3(-.05, .02, -5.3)]), 50, .005, 5), redB); CT.add(OBJ.curtainThread);
+    OBJ.curtainLine = new T3.Mesh(new T3.TubeGeometry(new T3.CatmullRomCurve3([v3(.28, 1.12, -6.9), v3(.15, 1.4, -9), v3(.05, 1.5, -12), v3(0, 1.5, -14.0)]), 80, .004, 5), redB); CT.add(OBJ.curtainLine);
+    // a cortina descosturada, caída: o canto aberto a partir do Ciclo II
+    const CD = new T3.Group(); GC.add(CD); OBJ.curtainDown = CD;
+    [[.45, -6.2, .3], [.62, -6.75, 1.4], [.38, -7.3, 2.6], [.7, -7.7, .8], [.5, -5.95, 2]].forEach(([x, z, r]) => { plane(.5, .7, cm, x, .012 + R(0, .01), z, -Math.PI / 2, 0, CD).rotation.z = r; });
+    CD.add(new T3.Mesh(new T3.TubeGeometry(new T3.CatmullRomCurve3([v3(.3, .02, -6.1), v3(.5, .03, -6.6), v3(.35, .02, -7.3), v3(.6, .03, -7.9)]), 40, .004, 5), redB)); }
 
   /* ---------- 7. a sala de revisão (x = 600) ---------- */
   const RV = new T3.Group(); RV.position.set(600, 0, 0); scene.add(RV); PLACE.revisao = RV;
@@ -3148,7 +3202,13 @@ function buildV12() {
     // o avesso de uma porta comum, e a ponta de um cadeado
     box(.05, 2.1, 1, M(0x8a8a86), -1.94, 1.05, -11.3, DT); box(.06, .07, .035, M(0x3e3e3c), -1.9, 1.16, -11.0, DT);
     ball(.05, MB(0xfff0e0), 0, 2.55, -11.3, 1, 1.2, 1, DT); OBJ.datLamp = new T3.PointLight(0xfff0e0, .85, 6, 1.4); OBJ.datLamp.position.set(0, 2.4, -11.3); DT.add(OBJ.datLamp);
-    const cl = new T3.PointLight(0xffffff, .35, 6, 2); cl.position.set(0, 2.2, -3); DT.add(cl); }
+    const cl = new T3.PointLight(0xffffff, .35, 6, 2); cl.position.set(0, 2.2, -3); DT.add(cl); OBJ.datCorrLight = cl;
+    // a parede de papel prensado: fecha o corredor para quem ainda não leu a própria história
+    TEX.pressed = ctex(256, 256, (x, w, h) => { x.fillStyle = '#cfccc2'; x.fillRect(0, 0, w, h); for (let y = 0; y < h; y += 2.2) { x.strokeStyle = `rgba(${R(40, 90) | 0},${R(40, 88) | 0},${R(36, 80) | 0},${R(.12, .45)})`; x.lineWidth = R(.5, 1.4); x.beginPath(); x.moveTo(0, y + R(-.6, .6)); x.lineTo(w, y + R(-.8, .8)); x.stroke(); } });
+    const DW = new T3.Group(); DW.position.set(0, 0, -6); DT.add(DW); OBJ.datWall = DW;
+    box(1.12, 2.4, .5, M(0xffffff, { map: TEX.pressed }), 0, 1.2, 0, DW);
+    const wl = new T3.PointLight(0xfff0e0, .9, 3.2, 1.6); wl.position.set(0, 2.1, .9); DW.add(wl);
+    OBJ.datWallPage = plane(.21, .29, M(0xffffff, { map: TEX.typedRoll }), .12, 1.45, .255, 0, 0, DW); OBJ.datWallPage.rotation.z = -.08; }
   // o Datilógrafo: longo, cinza, dobrado sobre a máquina; no lugar do rosto, uma folha em branco
   const TY = new T3.Group(); TY.position.set(0, 0, -13.3); DT.add(TY); OBJ.typist = TY;
   TY.add(sculptTypist());
@@ -3186,6 +3246,21 @@ const FX_V12 = {
   // sons contínuos
   typeOn() { loopSnd('type', 'typing', 1250); OBJ.typing = true; }, typeOff() { loopSnd('type'); OBJ.typing = false; },
   sewOn() { loopSnd('sew', 'needle', 1700); OBJ.sewing = true; }, sewOff() { loopSnd('sew'); OBJ.sewing = false; },
+  // a cortina da Costureira e a parede de papel do avesso
+  curtainUp() { OBJ.curtain.visible = true; OBJ.curtainDown.visible = false; OBJ.seamKneel.visible = OBJ.seamStand.visible = false; OBJ.fioThread.visible = false; },
+  curtainDown() { OBJ.curtain.visible = false; OBJ.curtainDown.visible = true; if (!OBJ.seamStand.visible) OBJ.seamKneel.visible = true; },
+  curtainTouch() {
+    loopSnd('sew'); OBJ.sewing = false; const f = OBJ.curtainFront;
+    tween({ dur: .5, ease: 'out', on: k => { f.position.x = .3 + k * .025; } }); tween({ delay: 2.2, dur: .6, ease: 'io', on: k => { f.position.x = .325 - k * .025; } });
+  },
+  curtainBulge() { const b = OBJ.curtainBulge; if (b.visible) return; b.visible = true; tween({ dur: 2.2, ease: 'sine', on: k => { b.scale.x = .05 + k * .5; } }); },
+  needleOut() { OBJ.needleOut = true; OBJ.curtainNeedle.position.set(.26, 1.38, -6.9); },
+  lineToDoor() { const l = OBJ.curtainLine, n = l.geometry.index.count; l.visible = true; tween({ dur: 2.6, ease: 'in', on: k => { l.geometry.setDrawRange(0, Math.floor(n * k / 6) * 6); } }); },
+  datWall() { OBJ.datWall.visible = true; },
+  datWallPage() { OBJ.datWallPage.visible = true; },
+  wallFlickOn() { const L = OBJ.datCorrLight; clearInterval(LOOPS.flick); LOOPS.flick = setInterval(() => { L.intensity = .06; setTimeout(() => { L.intensity = .35; }, 90); }, 1250); },
+  wallFlickOff() { clearInterval(LOOPS.flick); delete LOOPS.flick; OBJ.datCorrLight.intensity = .35; },
+  wallPush() { const w = OBJ.datWall; tween({ dur: .25, ease: 'out', on: k => { w.position.z = -6 - k * .008; } }); tween({ delay: .4, dur: .5, ease: 'io', on: k => { w.position.z = -6.008 + k * .008; } }); },
   sewPause() { loopSnd('sew'); OBJ.sewing = false; setTimeout(() => SND.play('needle'), 1300); },
   // corredor
   trail() { OBJ.trail.visible = true; }, trail2() { OBJ.trail.visible = OBJ.trail2.visible = true; },
@@ -3352,6 +3427,9 @@ function resetV12() {
   OBJ.plaqueDraw(''); OBJ.holeThreads.visible = false; OBJ.sDoor.rotation.y = 0; OBJ.beyond.visible = false; OBJ.morning.intensity = 0;
   OBJ.winPlane.material.map = TEX.winWho; OBJ.fallenBook.visible = false; OBJ.newVol.visible = false;
   OBJ.typistHead.rotation.set(1.35, 0, 0); OBJ.typistFace.visible = false; OBJ.rollSheet.visible = true; OBJ.datLamp.intensity = .85;
+  OBJ.curtain.visible = OBJ.curtainDown.visible = false; OBJ.curtainBulge.visible = false; OBJ.curtainFront.position.x = .3; OBJ.needleOut = false;
+  OBJ.curtainNeedle.position.set(.33, 1.12, -6.9); OBJ.curtainLine.visible = false; OBJ.curtainLine.geometry.setDrawRange(0, Infinity);
+  OBJ.datWall.visible = false; OBJ.datWall.position.z = -6; OBJ.datWallPage.visible = false; OBJ.datCorrLight.intensity = .35;
   OBJ.flyers.forEach(p => { p.visible = false; });
 }
 
@@ -3368,6 +3446,7 @@ function animV12(now) {
     });
   }
   if (OBJ.sewing && OBJ.needle) OBJ.needle.position.y = .19 + Math.abs(Math.sin(now * 4)) * .06;
+  if (OBJ.curtain && OBJ.curtain.visible && !OBJ.needleOut) OBJ.curtainNeedle.position.x = OBJ.sewing ? .33 - Math.max(0, Math.sin(now * 3.7)) * .06 : .33;   // a ponta aparece e some
   if (OBJ.typistArms) OBJ.typistArms.forEach((g, i) => { g.rotation.x = OBJ.typing ? Math.sin(now * 13 + i * 2.1) * .045 : g.rotation.x * .9; });
 }
 
@@ -3475,6 +3554,7 @@ const ITENS = {
     { id: 'relogio', nome: 'Relógio parado', has: () => tem('relogio'), d: 'Os números do mostrador foram raspados. Não faz tique-taque: encostado no ouvido, faz um som de água.' },
   ],
   mem: {
+    digital: { nome: 'A digital', d: 'Uma impressão digital vermelha no ombro, de quem a tocou por trás. Não sai com nada. Tem o tamanho de um dedo comprido.' },
     viuBilhetes: { nome: 'Os bilhetes', d: 'Atrás dela, na sala escura, uma parede inteira de bilhetes NÃO OLHE PARA TRÁS, em dezenas de letras. Ela já olhou uma vez.' },
     traca: { nome: 'Traça (I)', d: 'O pó das asas de uma traça, desenhado na palma da mão. Um risco ao lado: I. Não sai com nada.' },
     tecla: { nome: 'Tecla (II)', d: 'Na ponta do dedo, o desenho gasto de uma tecla sem letra. Dois riscos: II.' },
@@ -3489,28 +3569,32 @@ const ITENS = {
 };
 
 /* ---------- destinos que mudam com a vez (voltar a um lugar pode, repetir não pode) ---------- */
-const ESQ = { vez: 'esquerda', v: ['esquerda', 'esquerdaEntra'] };
+/* anéis: quem está longe só aparece com o que ela carrega ou lembra; antes disso, o lugar mostra a fechadura
+   (a cortina costurada, a parede de papel, o botão que não afunda, os espelhos vazios) e devolve a escolha */
+const ESQ = { 1: { vez: 'esquerda', v: ['esquerdaFechada', 'esquerdaFechadaEntra'] }, 2: { vez: 'esquerda', v: ['esquerda', 'esquerdaEntra'] } };   // a Costureira, só para quem já voltou ao corredor uma vez
+const ESQ_VOLTA = { 1: 'esquerdaFechadaVolta', 2: 'esquerdaVolta' };
 const DIR = { vez: 'direita', v: ['direita', 'direitaVolta', 'direitaVolta2'] };
 const CAD = { vez: 'cadeado', v: ['cadeado', 'cadeadoVolta'] };
 const VERM = { vez: 'verm', v: ['vermelho', 'vermelhoVolta'] };
 const SALA_IN = { vez: 'sala', v: [null, 'salaVolta', 'salaVolta2'] };         // já dentro da sala branca
-const DAT = { vez: 'dat', v: ['datilografo', 'datilografoVolta'] };
+const DAT = { mem: 'rascunho', sim: { vez: 'dat', v: ['datilografo', 'datilografoVolta'] }, nao: { vez: 'avF', v: ['avessoFechado', 'avessoFechadoVolta'] } };   // só passa quem já leu a própria história
 const REV = { vez: 'rev', v: ['revisao', 'revisaoVolta'] };
 const PORTA = { vez: 'porta', v: ['portaSemNome', 'portaVolta'] };
 const TENT = { vez: 'tentativa', v: ['tentativa1', 'tentativa2', 'tentativa3'] };
-const NOMEQ = { vez: 'nomeQ', v: ['nomeQualquer1', 'nomeQualquer2', 'nomeQualquer3'] };
+const NOMEQ = { 1: { vez: 'nomeQ', v: ['nomeQualquer1', 'nomeQualquer2F', 'nomeQualquer3F'] }, 2: { vez: 'nomeQ', v: ['nomeQualquer1', 'nomeQualquer2', 'nomeQualquer3'] } };
 
 /* ---------- escolhas que se repetem ---------- */
 const INICIO_Q = { q: '?', opts: [['Esquerda', 40, ESQ], ['Direita', 60, DIR]] };
 const DIR_Q = { q: '?', opts: [['Entrar na porta', 30, CAD], ['Seguir o vermelho', 70, VERM], ['Voltar ao corredor branco', 10, 'corredorVolta']] };
 const ESQ_Q = { q: '?', opts: [['Estender o braço', 40, 'fio', 'fio'], ['Oferecer a fita', 10, 'trocaFita', { feito: 'deuFita', req: 'fita' }], ['Ir até a porta', 35, PORTA], ['Voltar', 15, 'esquerdaSai']] };
 const PORTA_Q = { q: '?', opts: [['Escrever um nome qualquer', 40, NOMEQ], ['Escrever seu nome', 30, 'nomeRiscado', { feito: 'riscou', req: 'nome' }],
-  ['Escrever seu nome, como pede a errata', 20, 'pontoFinal', { req: 'nome,errata', oculta: true }], ['Voltar', 10, 'esquerdaVolta']] };
+  ['Escrever seu nome, como pede a errata', 20, 'pontoFinal', { req: 'nome,errata', oculta: true }], ['Voltar', 10, ESQ_VOLTA]] };
+const ESQ_FQ = { q: '?', opts: [['Ir até a porta', 70, PORTA], ['Voltar', 30, 'esquerdaSai']] };                   // o corredor cinza com a cortina fechada
 const CAD_Q = { q: '?', opts: [['Girar as quatro marcas, na ordem', 25, 'revisaoAbre', { req: 'traca,tecla,vela,agulha' }], ['Girar como diz o bilhete', 30, 'letraErrada'],
   ['Tentar uma combinação', 25, TENT], ['Comparar a letra do bilhete', 10, 'letraFalsa', { feito: 'comparou', req: 'letra', oculta: true }], ['Voltar', 10, DIR]] };
 const REV_Q = { q: '?', opts: [['Ler a página aberta', 35, 'errata', 'leuErrata'], ['Olhar pela janela', 25, 'janela', 'janela'], ['Assinar o livro', 20, 'encadernada'], ['Voltar ao corredor', 20, 'revisaoSai']] };
 const SALA_Q = { q: 'ESCOLHA', opts: [['?', 56, 'buraco', 'lanterna'], ['Chave', 44, 'chave', 'chave'], ['Sentar e esperar', 10, 'salaVazia', { req: 'lanterna,chave', oculta: true }], ['Voltar pelo corredor vermelho', 10, 'salaSai']] };
-const ELEV_Q = { q: '?', opts: [['Botão de cima', 34, { vez: 'cima', v: ['andarCima', 'andarCima2', null] }], ['Botão do meio', 28, { vez: 'meio', v: ['andarMeio', 'andarMeio2'] }], ['Botão de baixo', 38, { vez: 'baixo', v: ['andarBaixo', null] }]] };
+const ELEV_Q = { q: '?', opts: [['Botão de cima', 34, { vez: 'cima', v: ['andarCima', 'andarCima2', null] }], ['Botão do meio', 28, { vez: 'meio', v: ['andarMeio', 'andarMeio2'] }], ['Botão de baixo', 38, { mem: 'digital', sim: { vez: 'baixo', v: ['andarBaixo', null] }, nao: { vez: 'baixoF', v: ['botaoBaixo', null] } }]] };
 const CIMA_Q = { q: '?', opts: [['Correr para a cabine', 50, 'correrCabine'], ['Seguir o fio', 25, 'seguirFio', { feito: 'achouNome', req: 'fio' }], ['Procurar no escuro', 25, 'asCegas', 'achouNome']] };
 const MEIO_Q = { q: '?', opts: [['Deitar na cama', 45, 'deitar'], ['Pegar o relógio', 20, 'relogio', 'pegouRelogio'], ['Voltar ao elevador', 35, 'voltaQuarto']] };
 const DAT_Q = { q: '?', opts: [['Ler o que está escrito', 40, 'rascunhos', 'leuRolo'], ['Tirar o papel da máquina', 30, 'emBranco'], ['Pedir a máquina', 30, 'pedido', { feito: 'pediu', req: 'letra' }]] };
@@ -3544,9 +3628,9 @@ const STORY = {
   /* ================= a Esquerda: o corredor cinza e a Costureira ================= */
   esquerda: { conta: 'esquerda', beats: [
     { sfx: 'steps', cam: [{ p: [0, 1.6, -8.3], l: [-3, 1.45, -8.8], d: 3.6, walk: 1 }, { p: [-3.4, 1.6, -8.8], l: [-6, 1.4, -8.8], d: 3, walk: 1 }], veil: { c: '#4a4a48', o: 1, d: 2000, delay: 4600 }, auto: 6800 },
-    { fx: 'place', place: 'cinza', env: 'cinza', amb: 'dark', cam: { p: [540, 1.6, 1.4], l: [540, 1.3, -6], cut: 1 }, veil: { o: 0, d: 2400 }, auto: 2600 },
+    { fx: ['place', 'curtainDown'], place: 'cinza', env: 'cinza', amb: 'dark', cam: { p: [540, 1.6, 1.4], l: [540, 1.3, -6], cut: 1 }, veil: { o: 0, d: 2400 }, auto: 2600 },
     { sfx: 'steps', cam: { p: [540, 1.6, -1.2], l: [540, .3, -4], d: 4.4, walk: 1 }, auto: 4600 },                             // folhas em branco, mais grossas a cada passo
-    { fx: 'sewOn', cam: { p: [539.9, 1.6, -3.6], l: [540.6, .6, -7], d: 4, walk: 1 }, auto: 4400 },                             // uma mulher curvada costura folhas com fio vermelho
+    { fx: 'sewOn', cam: { p: [539.9, 1.6, -3.6], l: [540.6, .6, -7], d: 4, walk: 1 }, auto: 4400 },                             // a cortina caiu, descosturada; atrás dela, uma mulher curvada costura folhas com fio vermelho
     { cam: { p: [540, 1.6, -5.2], l: [540.45, .55, -7], d: 3.2, walk: 1 }, auto: 3600 },                                         // a boca dela também está costurada
     { fx: 'clothUp', cam: { l: [540.4, .62, -7], d: 1.4 }, auto: 1600 },                                                         // ela ergue um pano bordado sem levantar os olhos
     { note: 'aindaBranco', sfx: 'paper', hold: true },
@@ -3555,14 +3639,37 @@ const STORY = {
   ] },
   esquerdaEntra: { conta: 'esquerda', next: 'esquerdaVolta', beats: [
     { sfx: 'steps', cam: [{ p: [0, 1.6, -8.3], l: [-3, 1.45, -8.8], d: 3, walk: 1 }, { p: [-3.4, 1.6, -8.8], l: [-6, 1.4, -8.8], d: 2.6, walk: 1 }], veil: { c: '#4a4a48', o: 1, d: 1800, delay: 3800 }, auto: 5800 },
-    { fx: ['place', 'footprints', 'sewOn', 'seamSit'], place: 'cinza', env: 'cinza', amb: 'dark', cam: { p: [540, 1.6, 1.4], l: [540, .4, -3], cut: 1 }, veil: { o: 0, d: 2200 }, auto: 2800 },   // as folhas guardam as pegadas dela
+    { fx: ['place', 'footprints', 'sewOn', 'curtainDown', 'seamSit'], place: 'cinza', env: 'cinza', amb: 'dark', cam: { p: [540, 1.6, 1.4], l: [540, .4, -3], cut: 1 }, veil: { o: 0, d: 2200 }, auto: 2800 },   // as folhas guardam as pegadas dela
     { sfx: 'steps', cam: { p: [540, 1.6, -4.4], l: [540.5, .6, -7], d: 4.6, walk: 1 }, auto: 4800 },
   ] },
   /* no corredor cinza de novo: ela não saiu do lugar; o carretel está quase vazio */
   esquerdaVolta: { beats: [
-    { fx: ['footprints', 'sewOn', 'seamSit'], cam: { p: [539.9, 1.6, -5.3], l: [540.5, .55, -7], d: 2.4 }, auto: 2800 },
+    { fx: ['footprints', 'sewOn', 'curtainDown', 'seamSit'], cam: { p: [539.9, 1.6, -5.3], l: [540.5, .55, -7], d: 2.4 }, auto: 2800 },
     { fx: 'spoolEmpty', cam: { p: [539.9, 1.55, -5.5], l: [540.4, .1, -6.8], d: 2 }, auto: 2400 },
     { cam: { p: [540, 1.6, -5.8], l: [540, 1.5, -13.9], d: 2.4 }, choiceAt: 2200, choice: ESQ_Q },
+  ] },
+  /* Ciclo I: o canto da Costureira está fechado por uma cortina de folhas costuradas; a porta sem nome, no fundo, está livre */
+  esquerdaFechada: { conta: 'esquerda', beats: [
+    { sfx: 'steps', cam: [{ p: [0, 1.6, -8.3], l: [-3, 1.45, -8.8], d: 3.6, walk: 1 }, { p: [-3.4, 1.6, -8.8], l: [-6, 1.4, -8.8], d: 3, walk: 1 }], veil: { c: '#4a4a48', o: 1, d: 2000, delay: 4600 }, auto: 6800 },
+    { fx: ['place', 'curtainUp'], place: 'cinza', env: 'cinza', amb: 'dark', cam: { p: [540, 1.6, 1.4], l: [540, 1.3, -6], cut: 1 }, veil: { o: 0, d: 2400 }, auto: 2600 },
+    { sfx: 'steps', cam: { p: [540, 1.6, -1.2], l: [540, .3, -4], d: 4.4, walk: 1 }, auto: 4600 },                             // folhas em branco, mais grossas a cada passo
+    { fx: 'sewOn', cam: { p: [539.9, 1.6, -3.6], l: [540.3, 1.15, -6.9], d: 4, walk: 1 }, auto: 4400 },                       // à direita, uma cortina de folhas costuradas, de chão a teto; atrás dela, uma agulha
+    { cam: { p: [539.75, 1.45, -6.4], l: [540.3, 1.12, -6.9], d: 3.2, walk: 1 }, auto: 3800 },                                  // a ponta atravessa o papel, some, volta: cada ponto vermelho surge sozinho
+    { fx: 'curtainTouch', amb: 'none', cam: { p: [539.98, 1.4, -6.85], l: [540.3, 1.12, -6.92], d: 1.6 }, auto: 3200 },         // ela encosta a mão: a agulha para
+    { fx: 'sewOn', amb: 'dark', cam: { p: [539.75, 1.5, -6.6], l: [540.1, .2, -6.7], d: 2.2 }, auto: 3200 },                    // ela tira a mão, e a costura recomeça; por um dos pontos, uma ponta de fio vermelho corre pelo chão
+    { cam: { p: [540, 1.6, -7.4], l: [540, 1.4, -14], d: 3 }, auto: 3200 },                                                     // ao fundo, uma porta sem moldura e sem maçaneta
+    { cam: { l: [540, 1.5, -13.9], d: 2.2 }, choiceAt: 2000, choice: ESQ_FQ },
+  ] },
+  esquerdaFechadaEntra: { conta: 'esquerda', next: 'esquerdaFechadaVolta', beats: [
+    { sfx: 'steps', cam: [{ p: [0, 1.6, -8.3], l: [-3, 1.45, -8.8], d: 3, walk: 1 }, { p: [-3.4, 1.6, -8.8], l: [-6, 1.4, -8.8], d: 2.6, walk: 1 }], veil: { c: '#4a4a48', o: 1, d: 1800, delay: 3800 }, auto: 5800 },
+    { fx: ['place', 'footprints', 'sewOn', 'curtainUp'], place: 'cinza', env: 'cinza', amb: 'dark', cam: { p: [540, 1.6, 1.4], l: [540, .4, -3], cut: 1 }, veil: { o: 0, d: 2200 }, auto: 2800 },   // as folhas guardam as pegadas dela
+    { sfx: 'steps', cam: { p: [539.9, 1.6, -5.4], l: [540.3, 1.1, -6.9], d: 4.6, walk: 1 }, auto: 4800 },
+  ] },
+  /* de novo diante da cortina: as pegadas dela param bem na frente; a costura não parou */
+  esquerdaFechadaVolta: { beats: [
+    { fx: ['footprints', 'sewOn', 'curtainUp'], cam: { p: [539.85, 1.55, -6.1], l: [540.3, .9, -6.9], d: 2.4 }, auto: 2800 },
+    { cam: { p: [539.9, 1.5, -6.4], l: [540.1, .2, -6.7], d: 2 }, auto: 2400 },                                                 // a ponta de fio no chão está mais comprida
+    { cam: { p: [540, 1.6, -6.6], l: [540, 1.5, -13.9], d: 2.4 }, choiceAt: 2200, choice: ESQ_FQ },
   ] },
   esquerdaSai: { beats: [
     { fx: 'sewOff', sfx: 'steps', cam: [{ p: [540, 1.6, -4.5], l: [540, 1.5, 2], d: 1.8 }, { p: [540, 1.6, 1.2], l: [540, 1.5, 3], d: 4, walk: 1 }], veil: { c: '#000', o: 1, d: 1400, delay: 4400 }, auto: 6000 },
@@ -3626,6 +3733,22 @@ const STORY = {
     { sfx: 'needle', cam: { p: [540, 1.6, -13.45], l: [540, 1.5, -14.05], d: 1.6 }, auto: 2200 },                                      // ela costura a plaquinha na porta
     { sfx: 'needle', shake: .01, veil: { c: '#3a3a38', o: .55, d: 2600 }, auto: 2800 },                                                 // depois a manga dela na plaquinha
     { sfx: 'needle', shake: 0, veil: { c: '#000', o: 1, d: 3200 }, auto: 3800 },                                                        // depois o resto. não dói: é como dormir dentro de um livro fechado
+    ...RECOMECO,
+  ] },
+  /* com a cortina fechada (Ciclo I): quem costura não aparece; a cortina se estufa, e a agulha aponta */
+  nomeQualquer2F: { conta: 'nomeQ', next: PORTA, beats: [
+    { fx: 'plaque', st: 'nome', sfx: 'paper', cam: PLAQUE, auto: 2600 },
+    { fx: ['plaqueDrink', 'sewOff'], amb: 'none', auto: 3200 },                                                                         // a costura para e não recomeça
+    { fx: ['curtainBulge', 'needleOut'], sfx: 'paper', cam: [{ p: [540, 1.6, -13.2], l: [540.3, 1.3, -6.9], d: 1.8 }, { p: [539.25, 1.6, -9.6], l: [540.3, 1.35, -6.9], d: 3, walk: 1 }], auto: 5400 },     // ela volta alguns passos: lá atrás, a cortina se estufa na altura de alguém de pé; a ponta da agulha saiu e ficou parada
+    { amb: 'dark', type: { t: 'Segunda tentativa.', col: '#111', y: 12 } },
+  ] },
+  nomeQualquer3F: { conta: 'nomeQ', beats: [
+    { fx: 'plaque', st: 'nome', sfx: 'paper', cam: PLAQUE, auto: 2600 },
+    { fx: ['plaqueDrink', 'sewOff', 'curtainBulge', 'needleOut'], amb: 'none', cam: { p: [540, 1.6, -13.3], l: [540.2, 1.35, -8], d: 2 }, auto: 2600 },   // o terceiro nome
+    { fx: 'lineToDoor', sfx: 'needle', auto: 3400 },                                                                                   // um fio vermelho sai da cortina e corre pelo ar até a porta
+    { sfx: 'needle', cam: { p: [540, 1.6, -13.45], l: [540, 1.5, -14.05], d: 1.6 }, auto: 2200 },                                      // a plaquinha é costurada na porta
+    { sfx: 'needle', shake: .01, veil: { c: '#3a3a38', o: .55, d: 2600 }, auto: 2800 },                                                 // depois a manga dela na plaquinha
+    { sfx: 'needle', shake: 0, veil: { c: '#000', o: 1, d: 3200 }, auto: 3800 },                                                        // depois o resto, por alguém que ela nunca viu
     ...RECOMECO,
   ] },
   nomeRiscado: { next: PORTA, beats: [
@@ -3823,7 +3946,7 @@ const STORY = {
     { fx: 'collectorAppear', sfx: 'paper', cam: { l: [60, .05, .6], d: 2.4 }, auto: 3800 },
     { sfx: 'tension', cam: { l: [60, 1.9, .72], d: 5.5, e: 'sine' }, auto: 5800 },
     { amb: 'none', cam: { p: [60, 1.74, .2], l: [60, 1.86, .62], d: 2.6 }, auto: 3400 },
-    { fx: 'collectorAttack', sfx: 'jump', print: 170, auto: 1000 },
+    { fx: 'collectorAttack', sfx: 'jump', print: 170, mem: 'digital', auto: 1000 },                                                // um dedo no ombro: a impressão digital vermelha
     { fx: 'stripOff', veil: { c: '#000', o: 1, d: 80 }, sfx: 'flap', amb: 'void', auto: 2200 },
     { fx: 'lightBlob', auto: 3000 },
     RESET,
@@ -3916,7 +4039,15 @@ const STORY = {
     { fx: 'place', place: 'mirror', env: 'mirror', amb: 'room', cam: { p: [180, 1.6, 2.1], l: [180, 1.3, -2.5], cut: 1 }, veil: { o: 0, d: 2400 }, auto: 3000 },
     { sfx: 'steps', cam: [{ p: [180, 1.6, 1.0], l: [178, 1.3, -.6], d: 2.6, walk: 1 }, { p: [180, 1.6, .5], l: [181.8, 1.3, .3], d: 2.4 }], auto: 5200 },
     { sfx: 'steps', cam: { p: [180, 1.6, -.7], l: [180, 1.45, -2.5], d: 3.2, walk: 1 }, choiceAt: 3600,
-      choice: { q: '?', opts: [['Cobrir o espelho', 52, 'espelhoCobrir'], ['Continuar olhando', 48, 'espelhoPortal']] } },
+      choice: { q: '?', opts: [['Cobrir o espelho', 52, { mem: 'nome', sim: 'espelhoCobrir', nao: { vez: 'espVazio', v: ['espelhoVazio', null] } }], ['Continuar olhando', 48, 'espelhoPortal']] } },
+  ] },
+  /* sem saber o próprio nome, ela não tem reflexo para perder: os lençóis caem e não há ninguém */
+  espelhoVazio: { conta: 'espVazio', next: 'espelhos', nextAt: 5, beats: [
+    { fx: 'sheetCover', sfx: 'flap', cam: { p: [180, 1.6, -1.5], l: [180, 1.1, -2.5], d: 1.4 }, auto: 2400 },
+    { fx: 'sheetsDrop', sfx: 'flap', say: say('FLAP', 70, 38, { ink: 1 }), cam: { p: [180, 1.6, -1.0], l: [178, 1.4, -.4], d: 1.8 }, auto: 2600 },   // os lençóis caem de todos os espelhos
+    { cam: { p: [180, 1.6, -.9], l: [182, 1.4, -.9], d: 2.4 }, auto: 3200 },                                                           // em nenhum há ninguém: só a sala, vazia
+    { amb: 'none', cam: { p: [180, 1.6, -.6], l: [178, 1.3, .9], d: 2.2 }, auto: 2800 },
+    { fx: 'sheetsRise', sfx: 'paper', amb: 'room', cam: { p: [180, 1.6, -.4], l: [180, 2.3, -.4], d: 2.4 }, auto: 3400 },              // os lençóis voltam a subir, como se alguém os puxasse por cima
   ] },
   espelhoCobrir: { beats: [
     { fx: 'sheetCover', sfx: 'flap', cam: { p: [180, 1.6, -1.5], l: [180, 1.1, -2.5], d: 1.4 }, auto: 2400 },
@@ -4047,6 +4178,13 @@ const STORY = {
     ...RECOMECO,
   ] },
 
+  /* sem a digital: o botão de baixo não afunda; o dedo vermelho pintado nele fica onde o dela não chega */
+  botaoBaixo: { conta: 'baixoF', next: 'elevador', nextAt: 6, beats: [
+    { cam: { p: [240.42, 1.2, -1.97], l: [240.69, 1.18, -1.97], d: 1.6 }, auto: 2200 },                                                 // o botão de baixo; o dedo vermelho pintado nele
+    { fx: 'btnStuck', sfx: 'locked', auto: 2600 },                                                                                      // ela aperta: ele não afunda
+    { auto: 2600 },                                                                                                                     // o dedo pintado é mais comprido que o dela
+    { sfx: 'water', cam: { p: [240.1, 1.6, -2.2], l: [240, .6, -1.2], d: 2.2 }, auto: 3000 },                                          // pela fresta do chão da cabine, cheiro de água e de vela apagada
+  ] },
   /* botão de baixo: o andar inundado. Velas vermelhas, alguém de costas, e riscos na parede: ele conta */
   andarBaixo: { conta: 'baixo', beats: [
     { fx: 'grateClose', cab: 'elev', sfx: 'creak', cam: { l: [240, 1.4, -1], d: 1.4 }, auto: 1600 },
@@ -4531,6 +4669,23 @@ const STORY = {
     { fx: ['place', 'typeOn', 'typistOn'], place: 'dat', env: 'avesso2', amb: 'dark', cam: { p: [660, 1.6, -9.6], l: [660, 1.35, -12.3], d: 2.4 }, veil: { o: 0, d: 1400 }, auto: 3200 },   // a máquina não parou; ele não levanta a cabeça
     { choice: DAT_Q },
   ] },
+  /* sem ter lido a própria história: o corredor do avesso está fechado por papel prensado; do outro lado, as teclas */
+  avessoFechado: { conta: 'avF', next: SALA_IN, beats: [
+    { fx: ['place', 'typeOn', 'datWall'], place: 'dat', env: 'avesso2', amb: 'dark', cam: { p: [660, 1.6, 1.4], l: [660, 1.5, -6], cut: 1 }, veil: { o: 0, d: 2400 }, auto: 3000 },   // um corredor apertado, entre o avesso de todas as salas
+    { sfx: 'steps', cam: { p: [660, 1.6, -2.4], l: [660, 1.45, -6], d: 3.4, walk: 1 }, auto: 3800 },                                  // no meio dele, uma parede de papel prensado, de chão a teto
+    { fx: 'wallFlickOn', cam: { p: [660, 1.6, -5.3], l: [660, 1.4, -6], d: 2.6, walk: 1 }, auto: 3800 },                              // do outro lado, teclas; a cada tecla, a lâmpada atrás dela pisca
+    { fx: 'wallPush', sfx: 'paper', shake: .01, auto: 2600 },                                                                          // ela empurra: o papel não cede nem um dedo
+    { shake: 0, fx: 'wallFlickOff', cam: { p: [660, 1.6, -5.2], l: [660, 1.5, 0], d: 2.2 }, auto: 2600 },
+    { fx: 'typeOff', sfx: 'steps', cam: { p: [660, 1.6, 1.2], l: [660, 1.5, 3], d: 5, walk: 1 }, veil: { c: '#fff', o: 1, d: 1600, delay: 3400 }, auto: 5200 },   // de volta, pela luz do "?"
+    { fx: ['place', 'ruleGone'], place: '-', env: 'white', amb: 'room', cam: { p: [120, 1.6, -.3], l: [120, 1.55, -3], cut: 1 }, auto: 300 },
+  ] },
+  /* de novo diante da parede: alguém prendeu nela uma folha datilografada */
+  avessoFechadoVolta: { conta: 'avF', next: SALA_IN, beats: [
+    { fx: ['place', 'typeOn', 'datWall', 'datWallPage', 'wallFlickOn'], place: 'dat', env: 'avesso2', amb: 'dark', cam: { p: [660, 1.6, -4.8], l: [660, 1.45, -6], cut: 1 }, veil: { o: 0, d: 2000 }, auto: 3200 },
+    { cam: { p: [660.05, 1.5, -5.55], l: [660.12, 1.45, -5.75], d: 2 }, auto: 3200 },                                                 // uma folha presa na parede, cheia de linhas; nenhuma ela consegue ler
+    { fx: ['typeOff', 'wallFlickOff'], sfx: 'steps', cam: [{ p: [660, 1.6, -5], l: [660, 1.5, 0], d: 1.6 }, { p: [660, 1.6, 1.2], l: [660, 1.5, 3], d: 4, walk: 1 }], veil: { c: '#fff', o: 1, d: 1600, delay: 4000 }, auto: 5800 },
+    { fx: ['place', 'ruleGone'], place: '-', env: 'white', amb: 'room', cam: { p: [120, 1.6, -.3], l: [120, 1.55, -3], cut: 1 }, auto: 300 },
+  ] },
   rascunhos: { beats: [
     { flag: 'leuRolo', cam: { p: [660, 1.3, -11.2], l: [660, .05, -10], d: 2.4 }, auto: 2600 },                                       // ela puxa o rolo: a história dela, linha por linha
     { note: 'rolo', sfx: 'paper', hold: true },
@@ -5001,7 +5156,7 @@ function enter(name, at) { G.node = name; G.i = at || 0; const k = STORY[name].c
 function goNode(name) { enter(name, 0); }
 function endCycle() {
   G.cycle++; G.flags = {}; G.cnt = {}; G.hist = []; renderInv();
-  cycleEl.querySelector('b').textContent = roman(G.cycle);
+  cycleEl.querySelector('b').textContent = roman(G.cycle); salvar();
   const card = $('#cycleCard');
   card.querySelector('.n').textContent = 'Ciclo ' + roman(G.cycle);
   card.hidden = false; card.classList.remove('go'); void card.offsetWidth; card.classList.add('go');
@@ -5099,7 +5254,7 @@ stageEl.addEventListener('click', e => { if (e.target.closest('#choice') || e.ta
 stageEl.addEventListener('pointermove', e => { const r = stageEl.getBoundingClientRect(); MOUSE.tx = ((e.clientX - r.left) / r.width - .5) * 2; MOUSE.ty = ((e.clientY - r.top) / r.height - .5) * 2; });
 stageEl.addEventListener('pointerleave', () => { MOUSE.tx = MOUSE.ty = 0; });
 document.addEventListener('keydown', e => {
-  if (!G.started) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); start(); } return; }
+  if (!G.started) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const d = !G.semSalvar && lerSave(); if (d) continuar(d); else start(); } return; }
   if (e.key === 'Escape' && G.inv) { openInv(false); return; }
   if (e.key === 'b' || e.key === 'B') { openInv(!G.inv); return; }
   if (G.inv) return;
@@ -5110,13 +5265,31 @@ document.addEventListener('keydown', e => {
 });
 $('#snd').addEventListener('click', e => { e.stopPropagation(); SND.init(); const on = SND.toggle(); e.currentTarget.setAttribute('aria-pressed', on); });
 $('#restart').addEventListener('click', e => { e.stopPropagation(); if (!G.started) return; clearTimeout(G.timer); if (G.typing) G.typing.finish(); resetWorld(); G.flags = {}; G.cnt = {}; G.hist = []; printMark(false); openInv(false); goNode('inicio'); });
+/* ---------------- progresso salvo: o ciclo e as memórias (o que atravessa os ciclos) ----------------
+   Um ciclo interrompido recomeça do corredor, como depois de uma morte; o que estava só no bolso se perde. */
+const SAVE_KEY = 'destino3d.progresso';
+function salvar() {
+  if (G.semSalvar) return;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ v: 1, ciclo: G.cycle, mem: Object.keys(G.mem).filter(k => G.mem[k]) })); } catch (e) { }
+}
+function lerSave() {
+  try { const d = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); if (d && d.v === 1 && d.ciclo >= 1) return d; } catch (e) { }
+  return null;
+}
+function apagarSave() { if (G.semSalvar) return; try { localStorage.removeItem(SAVE_KEY); } catch (e) { } }
+function continuar(d) {
+  G.cycle = d.ciclo; cycleEl.querySelector('b').textContent = roman(G.cycle);
+  (d.mem || []).forEach(m => { G.mem[m] = true; });
+  renderInv(); start();
+}
 function start() {
   if (G.started) return;
   G.started = true; SND.init(); if (SND.ctx && SND.ctx.state === 'suspended') SND.ctx.resume();
   $('#title').classList.add('gone'); setTimeout(() => $('#title').hidden = true, 900);
   play();
 }
-$('#begin').addEventListener('click', e => { e.stopPropagation(); start(); });
+$('#begin').addEventListener('click', e => { e.stopPropagation(); if (!G.semSalvar) apagarSave(); start(); });
+$('#resume').addEventListener('click', e => { e.stopPropagation(); const d = lerSave(); if (d) continuar(d); else start(); });
 
 /* teste: aplica o caminho inteiro até um ponto, sem esperar */
 function flushTweens() { let n = 0; while (tweens.length && n++ < 500) { const o = tweens.shift(); o.on(1, 1); o.done && o.done(); } }
@@ -5160,6 +5333,7 @@ function seek(node, idx) {
 
 /* ---------------- fim (os finais não recomeçam) ---------------- */
 function finale(name) {
+  apagarSave();                                                    // um final fecha a partida: não há o que continuar
   const card = $('#endCard');
   card.querySelector('.n').textContent = name;
   card.querySelector('.s').textContent = `em ${G.cycle} ciclo${G.cycle > 1 ? 's' : ''}`;
@@ -5169,7 +5343,7 @@ function finale(name) {
 $('#again').addEventListener('click', e => {
   e.stopPropagation(); $('#endCard').hidden = true;
   Object.keys(G.mem).forEach(k => { delete G.mem[k]; });
-  G.cycle = 1; cycleEl.querySelector('b').textContent = roman(1);
+  G.cycle = 1; cycleEl.querySelector('b').textContent = roman(1); apagarSave();
   clearTimeout(G.timer); resetWorld(); G.flags = {}; G.cnt = {}; G.hist = []; printMark(false); renderInv(); goNode('inicio');
 });
 
@@ -5177,7 +5351,7 @@ $('#again').addEventListener('click', e => {
 const invEl = $('#inv'), bagEl = $('#bag');
 function gainMem(m) {
   if (G.mem[m]) return;
-  G.mem[m] = true;
+  G.mem[m] = true; salvar();
   if (ITENS.mem[m]) { bagEl.classList.remove('nova'); void bagEl.offsetWidth; bagEl.classList.add('nova'); }
 }
 function renderInv(sel) {
@@ -5244,6 +5418,12 @@ function fit() { const r = stageEl.getBoundingClientRect(); resize3d(Math.max(1,
     setEnv('corridor', true); camera.position.copy(CAM.p); camera.lookAt(CAM.l);
     setVeil({ c: '#a80000', o: 0, d: 0 });
     const q = new URLSearchParams(location.search);
+    G.semSalvar = ['n', 'c', 'm'].some(k => q.has(k));                // endereço de teste: não lê nem grava o progresso
+    const sv = !G.semSalvar && lerSave();
+    if (sv && (sv.ciclo > 1 || sv.mem.length)) {
+      const r = $('#resume'); r.hidden = false; r.querySelector('small').textContent = `ciclo ${roman(sv.ciclo)}`;
+      $('#begin').firstChild.textContent = 'começar de novo'; $('#begin').classList.add('menor');
+    }
     if (q.get('c')) { G.cycle = +q.get('c'); cycleEl.querySelector('b').textContent = roman(G.cycle); }
     if (q.get('n') && STORY[q.get('n')]) { G.started = true; $('#title').hidden = true; seek(q.get('n'), +(q.get('i') || 0)); play(); }
     requestAnimationFrame(frame);
