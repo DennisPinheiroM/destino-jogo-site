@@ -1765,24 +1765,41 @@ const SC = {
   smax(a, b, k) { const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.max(a, b) + h * h * k * .25; },
   ell(px, py, pz, c, r) {
     const x = px - c[0], y = py - c[1], z = pz - c[2];
-    const k0 = Math.hypot(x / r[0], y / r[1], z / r[2]), k1 = Math.hypot(x / (r[0] * r[0]), y / (r[1] * r[1]), z / (r[2] * r[2]));
+    const ax = x / r[0], ay = y / r[1], az = z / r[2], bx = ax / r[0], by = ay / r[1], bz = az / r[2];
+    const k0 = Math.sqrt(ax * ax + ay * ay + az * az), k1 = Math.sqrt(bx * bx + by * by + bz * bz);
     return k1 ? k0 * (k0 - 1) / k1 : -Math.min(r[0], r[1], r[2]);
   },
   cone(px, py, pz, a, b, r1, r2) {
     const pax = px - a[0], pay = py - a[1], paz = pz - a[2], bax = b[0] - a[0], bay = b[1] - a[1], baz = b[2] - a[2];
     const h = Math.max(0, Math.min(1, (pax * bax + pay * bay + paz * baz) / (bax * bax + bay * bay + baz * baz)));
-    return Math.hypot(pax - bax * h, pay - bay * h, paz - baz * h) - (r1 + (r2 - r1) * h);
+    const qx = pax - bax * h, qy = pay - bay * h, qz = paz - baz * h;
+    return Math.sqrt(qx * qx + qy * qy + qz * qz) - (r1 + (r2 - r1) * h);
   },
-  torusY(px, py, pz, c, R, r) { const q = Math.hypot(px - c[0], pz - c[2]) - R; return Math.hypot(q, py - c[1]) - r; },
+  torusY(px, py, pz, c, R, r) { const dx = px - c[0], dz = pz - c[2], q = Math.sqrt(dx * dx + dz * dz) - R, dy = py - c[1]; return Math.sqrt(q * q + dy * dy) - r; },
   noise(x, y, z) { return Math.sin(x * 1.7 + Math.sin(y * 2.3) * 1.3) * Math.sin(y * 1.9 + Math.sin(z * 2.1) * 1.2) * Math.sin(z * 2.2 + Math.sin(x * 1.6) * 1.1); },
 };
 
 /* corpo = lista de partes; cada parte: {t:'e'|'c'|'tor', ...., k (suavidade), sub (escava)} */
 function makeSDF(parts, o = {}) {
   const amp = o.noise ?? .005, freq = o.freq ?? 9;
-  return (x, y, z) => {
+  // uma esfera em volta de cada parte: a parte longe demais para mudar a distância é pulada
+  parts.forEach(p => {
+    if (p.t === 'e') { p.bc = p.c; p.br = Math.max(...p.r); }
+    else if (p.t === 'c') { p.bc = [(p.a[0] + p.b[0]) / 2, (p.a[1] + p.b[1]) / 2, (p.a[2] + p.b[2]) / 2]; p.br = Math.hypot(p.b[0] - p.a[0], p.b[1] - p.a[1], p.b[2] - p.a[2]) / 2 + Math.max(p.r1, p.r2 ?? p.r1); }
+    else { p.bc = p.c; p.br = p.R + p.r; }
+  });
+  // as partes grandes primeiro (a distância encolhe cedo e as pequenas, longe, são puladas); a ordem só muda entre
+  // duas escavações: o que vem depois de uma cavidade continua sem ser escavado por ela
+  const ord = []; let run = [];
+  parts.forEach(p => { if (p.sub) { ord.push(...run.sort((a, b) => b.br - a.br), p); run = []; } else run.push(p); });
+  parts = ord.concat(run.sort((a, b) => b.br - a.br));
+  const f = (x, y, z, L = parts) => {
     let d = 1e9;
-    for (const p of parts) {
+    for (const p of L) {
+      const k = p.k ?? (p.sub ? .03 : .05), lim = (p.sub ? k - d : d + k) + p.br;          // pula se a parte está a mais de lim
+      if (lim <= 0) continue;
+      const ux = x - p.bc[0], uy = y - p.bc[1], uz = z - p.bc[2];
+      if (ux * ux + uy * uy + uz * uz >= lim * lim) continue;
       let v;
       if (p.t === 'e') v = SC.ell(x, y, z, p.c, p.r);
       else if (p.t === 'c') v = SC.cone(x, y, z, p.a, p.b, p.r1, p.r2 ?? p.r1);
@@ -1791,6 +1808,8 @@ function makeSDF(parts, o = {}) {
     }
     return d + SC.noise(x * freq, y * freq, z * freq) * amp;
   };
+  f.parts = parts; f.amp = amp;                                   // a malha usa as partes para listas por região
+  return f;
 }
 
 /* malha por surface nets (sem tabelas), normais pelo gradiente */
@@ -1798,8 +1817,41 @@ function meshSDF(sdf, min, max, cell, color, aoColor) {
   const nx = Math.ceil((max[0] - min[0]) / cell), ny = Math.ceil((max[1] - min[1]) / cell), nz = Math.ceil((max[2] - min[2]) / cell);
   const sx = nx + 1, sy = ny + 1, val = new Float32Array(sx * sy * (nz + 1));
   const I = (i, j, k) => i + sx * (j + sy * k);
-  for (let k = 0; k <= nz; k++) for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++)
-    val[I(i, j, k)] = sdf(min[0] + i * cell, min[1] + j * cell, min[2] + k * cell);
+  // faixa estreita: o campo é medido primeiro numa grade 3× mais grossa; longe da superfície, a grade fina
+  // usa a interpolação dela (ali só o sinal importa), e o campo exato só é calculado perto da pele
+  const B = 3, gx = Math.ceil(nx / B) + 1, gy = Math.ceil(ny / B) + 1, gz = Math.ceil(nz / B) + 1, band = B * cell * 1.75;
+  const cv0 = new Float32Array(gx * gy * gz), J = (i, j, k) => i + gx * (j + gy * k);
+  for (let k = 0; k < gz; k++) for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++)
+    cv0[J(i, j, k)] = sdf(min[0] + i * B * cell, min[1] + j * B * cell, min[2] + k * B * cell);
+  // para cada célula grossa, só as partes que podem mudar o campo ali dentro (limites tirados dos cantos, que são exatos)
+  const half = B * cell * Math.sqrt(3) / 2, lists = sdf.parts ? new Array((gx - 1) * (gy - 1) * (gz - 1)) : null, margem = 2 * (sdf.amp || 0) + cell;
+  const listFor = (Ii, Jj, K) => {
+    const id = Ii + (gx - 1) * (Jj + (gy - 1) * K); let L = lists[id]; if (L) return L;
+    const cs = [cv0[J(Ii, Jj, K)], cv0[J(Ii + 1, Jj, K)], cv0[J(Ii, Jj + 1, K)], cv0[J(Ii + 1, Jj + 1, K)], cv0[J(Ii, Jj, K + 1)], cv0[J(Ii + 1, Jj, K + 1)], cv0[J(Ii, Jj + 1, K + 1)], cv0[J(Ii + 1, Jj + 1, K + 1)]];
+    const dUp = Math.min(...cs) + 2 * half + margem, dLo = Math.max(...cs) - 2 * half - margem;
+    const cx = min[0] + (Ii + .5) * B * cell, cy = min[1] + (Jj + .5) * B * cell, cz = min[2] + (K + .5) * B * cell;
+    L = sdf.parts.filter(p => {
+      const k = p.k ?? (p.sub ? .03 : .05), dist = Math.hypot(cx - p.bc[0], cy - p.bc[1], cz - p.bc[2]) - p.br - half - cell;
+      return p.sub ? dist < k - dLo : dist < dUp + k;
+    });
+    return (lists[id] = L);
+  };
+  const cellOf = (x, y, z) => [Math.max(0, Math.min(gx - 2, Math.floor((x - min[0]) / (B * cell)))), Math.max(0, Math.min(gy - 2, Math.floor((y - min[1]) / (B * cell)))), Math.max(0, Math.min(gz - 2, Math.floor((z - min[2]) / (B * cell))))];
+  for (let k = 0; k <= nz; k++) {
+    const K = Math.min((k / B) | 0, gz - 2), fk = k / B - K;
+    for (let j = 0; j <= ny; j++) {
+      const Jj = Math.min((j / B) | 0, gy - 2), fj = j / B - Jj;
+      for (let i = 0; i <= nx; i++) {
+        const Ii = Math.min((i / B) | 0, gx - 2), fi = i / B - Ii;
+        const v000 = cv0[J(Ii, Jj, K)], v100 = cv0[J(Ii + 1, Jj, K)], v010 = cv0[J(Ii, Jj + 1, K)], v110 = cv0[J(Ii + 1, Jj + 1, K)];
+        const v001 = cv0[J(Ii, Jj, K + 1)], v101 = cv0[J(Ii + 1, Jj, K + 1)], v011 = cv0[J(Ii, Jj + 1, K + 1)], v111 = cv0[J(Ii + 1, Jj + 1, K + 1)];
+        // uma superfície dentro da célula grossa fica a menos de uma diagonal de algum canto: só então mede de verdade
+        const near = Math.min(Math.abs(v000), Math.abs(v100), Math.abs(v010), Math.abs(v110), Math.abs(v001), Math.abs(v101), Math.abs(v011), Math.abs(v111)) < band;
+        if (near) { val[I(i, j, k)] = lists ? sdf(min[0] + i * cell, min[1] + j * cell, min[2] + k * cell, listFor(Ii, Jj, K)) : sdf(min[0] + i * cell, min[1] + j * cell, min[2] + k * cell); continue; }
+        val[I(i, j, k)] = ((v000 * (1 - fi) + v100 * fi) * (1 - fj) + (v010 * (1 - fi) + v110 * fi) * fj) * (1 - fk) + ((v001 * (1 - fi) + v101 * fi) * (1 - fj) + (v011 * (1 - fi) + v111 * fi) * fj) * fk;
+      }
+    }
+  }
   const vidx = new Int32Array(nx * ny * nz).fill(-1), C = (i, j, k) => i + nx * (j + ny * k);
   const pos = [];
   const corners = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
@@ -1831,8 +1883,8 @@ function meshSDF(sdf, min, max, cell, color, aoColor) {
   const nv = pos.length / 3, nor = new Float32Array(nv * 3), col = new Float32Array(nv * 3), e = cell * .6;
   const c1 = new T3.Color(color), c0 = new T3.Color(aoColor ?? 0x000000);
   for (let v = 0; v < nv; v++) {
-    const x = pos[v * 3], y = pos[v * 3 + 1], z = pos[v * 3 + 2];
-    let gx = sdf(x + e, y, z) - sdf(x - e, y, z), gy = sdf(x, y + e, z) - sdf(x, y - e, z), gz = sdf(x, y, z + e) - sdf(x, y, z - e);
+    const x = pos[v * 3], y = pos[v * 3 + 1], z = pos[v * 3 + 2], Lc = lists ? listFor(...cellOf(x, y, z)) : undefined;
+    let gx = sdf(x + e, y, z, Lc) - sdf(x - e, y, z, Lc), gy = sdf(x, y + e, z, Lc) - sdf(x, y - e, z, Lc), gz = sdf(x, y, z + e, Lc) - sdf(x, y, z - e, Lc);
     const L = Math.hypot(gx, gy, gz) || 1; gx /= L; gy /= L; gz /= L;
     nor[v * 3] = gx; nor[v * 3 + 1] = gy; nor[v * 3 + 2] = gz;
     const ao = Math.max(0, Math.min(1, sdf(x + gx * .06, y + gy * .06, z + gz * .06) / .06));
@@ -1868,6 +1920,9 @@ function sculptHunched() {
     { t: 'e', c: [0, .725, .155], r: [.088, .112, .1], k: .04 },
     { t: 'e', c: [0, .66, .22], r: [.048, .038, .048], k: .04 },                     // queixo
     { t: 'e', c: [0, .76, .25], r: [.06, .02, .03], sub: 1, k: .02 },             // órbitas
+    { t: 'e', c: [0, .785, .238], r: [.066, .016, .024], k: .02 },                 // a testa sobre as órbitas
+    { t: 'c', a: [0, .75, .25], b: [0, .705, .262], r1: .009, r2: .014, k: .012 },  // nariz
+    { t: 'e', c: [0, .692, .24], r: [.03, .005, .02], sub: 1, k: .005 },           // boca
     // coluna saltada
     ...[.3, .38, .46, .54].map(y => ({ t: 'e', c: [0, y, -.2 - (y - .3) * .1 - .1 * Math.sin((y - .3) * 6)], r: [.025, .02, .03], k: .02 })),
     ...mirror(s => [
@@ -1880,9 +1935,14 @@ function sculptHunched() {
       { t: 'e', c: [.04 * s, .37, .385], r: [.045, .035, .03], k: .02 },                         // mão
       { t: 'c', a: [.07 * s, .55, -.12], b: [.14 * s, .47, -.17], r1: .015, k: .03 },            // costelas
       { t: 'c', a: [.07 * s, .49, -.13], b: [.14 * s, .41, -.16], r1: .015, k: .03 },
+      { t: 'e', c: [.085 * s, .72, .135], r: [.012, .03, .022], k: .012 },                        // orelhas
+      { t: 'e', c: [.045 * s, .706, .215], r: [.022, .03, .02], sub: 1, k: .02 },                 // as faces fundas
+      { t: 'e', c: [.1 * s, .575, -.12], r: [.06, .065, .035], k: .04 },                          // omoplatas
+      ...[.356, .372, .388].map((y, i) => ({ t: 'c', a: [.05 * s, y, .39], b: [-.03 * s, y - .006, .405 - i * .004], r1: .0105, r2: .009, k: .006 })),   // dedos por cima dos joelhos
+      ...[-.025, 0, .025].map(d => ({ t: 'e', c: [(.1 + d) * s, .022, .445], r: [.012, .014, .02], k: .01 })),                                         // dedos dos pés
     ]).flat(),
   ];
-  return meshSDF(makeSDF(P, { noise: .004, freq: 11 }), [-.36, -.03, -.42], [.36, .92, .52], .016, 0x4a2420, 0x0d0303);
+  return meshSDF(makeSDF(P, { noise: .004, freq: 11 }), [-.36, -.03, -.42], [.36, .92, .52], .012, 0x4a2420, 0x0d0303);
 }
 
 /* ---------- a criatura grande: obesa, sem rosto ---------- */
@@ -1897,18 +1957,25 @@ function sculptBig() {
     { t: 'tor', c: [0, 1.66, .08], R: .55, r: .025, sub: 1, k: .05 },               // dobras
     { t: 'tor', c: [0, 1.22, .14], R: .48, r: .025, sub: 1, k: .05 },
     { t: 'e', c: [0, 1.6, .58], r: [.03, .04, .03], sub: 1, k: .02 },               // umbigo
+    { t: 'e', c: [0, 2.17, .2], r: [.24, .1, .16], k: .1 },                         // papada
+    { t: 'tor', c: [0, 2.12, .04], R: .27, r: .018, sub: 1, k: .04 },              // dobra da papada
+    { t: 'tor', c: [0, 1.93, .06], R: .5, r: .018, sub: 1, k: .05 },               // dobra sob o peito
     ...mirror(s => [
       { t: 'e', c: [.22 * s, 1.8, .28], r: [.2, .17, .14], k: .1 },
       { t: 'c', a: [.27 * s, 0, .02], b: [.3 * s, .7, 0], r1: .16, r2: .22, k: .1 },
       { t: 'c', a: [.3 * s, .7, 0], b: [.26 * s, 1.15, .02], r1: .24, r2: .32, k: .12 },
       { t: 'e', c: [.28 * s, .05, .1], r: [.13, .06, .2], k: .06 },
-      { t: 'c', a: [.45 * s, 2.12, -.02], b: [.63 * s, 1.55, .06], r1: .17, r2: .13, k: .1 },
+      { t: 'c', a: [.45 * s, 2.12, -.02], b: [.63 * s, 1.55, .06], r1: .2, r2: .15, k: .12 },              // o braço gordo, que pende
       { t: 'c', a: [.63 * s, 1.55, .06], b: [.6 * s, 1.05, .14], r1: .13, r2: .1, k: .06 },
       { t: 'e', c: [.6 * s, .95, .16], r: [.08, .12, .07], k: .04 },
-      ...[-.04, 0, .04].map(d => ({ t: 'c', a: [(.6 + d) * s, .9, .17], b: [(.6 + d * 1.4) * s, .78, .2], r1: .022, r2: .016, k: .02 })),
+      ...[-.054, -.018, .018, .054].map(d => ({ t: 'c', a: [(.6 + d) * s, .9, .17], b: [(.6 + d * 1.3) * s, .76, .2], r1: .022, r2: .015, k: .02 })),
+      { t: 'c', a: [.55 * s, .97, .21], b: [.52 * s, .88, .26], r1: .024, r2: .017, k: .02 },        // polegar
+      { t: 'e', c: [.29 * s, .74, .14], r: [.17, .09, .12], k: .08 },                                // o joelho gordo
+      { t: 'tor', c: [.29 * s, .66, .06], R: .2, r: .014, sub: 1, k: .04 },                         // dobra sob o joelho
+      ...[-.07, -.025, .025, .07].map(d => ({ t: 'e', c: [(.28 + d) * s, .035, .29], r: [.028, .028, .035], k: .02 })),   // dedos dos pés
     ]).flat(),
   ];
-  return meshSDF(makeSDF(P, { noise: .012, freq: 5 }), [-.95, -.03, -.55], [.95, 2.72, .75], .034, 0x93302a, 0x2a0505);
+  return meshSDF(makeSDF(P, { noise: .012, freq: 5 }), [-.95, -.03, -.55], [.95, 2.72, .75], .026, 0x93302a, 0x2a0505);
 }
 
 /* ---------- a criatura rastejante: quatro apoios, sorriso enorme ---------- */
@@ -1924,7 +1991,10 @@ function sculptCrawler() {
     ...mirror(s => [
       { t: 'c', a: [.17 * s, .6, .12], b: [.36 * s, .42, .3], r1: .075, r2: .055, k: .05 },
       { t: 'c', a: [.36 * s, .42, .3], b: [.3 * s, .04, .46], r1: .055, r2: .04, k: .04 },
-      ...[-.05, 0, .05].map(d => ({ t: 'c', a: [.3 * s, .03, .47], b: [(.3 + d) * s, .015, .62], r1: .017, r2: .011, k: .015 })),
+      ...[-.06, -.02, .02, .06].map(d => ({ t: 'c', a: [.3 * s, .03, .47], b: [(.3 + d * 1.2) * s, .015, .64], r1: .017, r2: .01, k: .015 })),
+      { t: 'e', c: [.37 * s, .43, .28], r: [.045, .045, .045], k: .03 },                              // cotovelo
+      { t: 'e', c: [.12 * s, .69, .02], r: [.075, .045, .07], k: .05 },                               // omoplata
+      ...[-.035, 0, .035].map(d => ({ t: 'c', a: [(.28 + d) * s, .025, -.33], b: [(.28 + d * 1.4) * s, .014, -.24], r1: .016, r2: .011, k: .012 })),   // dedos de trás
       { t: 'c', a: [.13 * s, .48, -.42], b: [.32 * s, .38, -.16], r1: .09, r2: .07, k: .06 },
       { t: 'c', a: [.32 * s, .38, -.16], b: [.28 * s, .04, -.46], r1: .065, r2: .04, k: .05 },
       { t: 'e', c: [.28 * s, .03, -.4], r: [.05, .03, .1], k: .03 },
@@ -1932,7 +2002,7 @@ function sculptCrawler() {
       { t: 'c', a: [.08 * s, .6, -.12], b: [.2 * s, .48, -.17], r1: .018, k: .03 },
     ]).flat(),
   ];
-  return meshSDF(makeSDF(P, { noise: .006, freq: 10 }), [-.62, -.03, -.72], [.62, .9, .78], .021, 0xb22a1d, 0x2a0303);
+  return meshSDF(makeSDF(P, { noise: .006, freq: 10 }), [-.62, -.03, -.72], [.62, .9, .78], .016, 0xb22a1d, 0x2a0303);
 }
 
 /* ---------- a mão do jogador segurando a lanterna (primeira pessoa) ----------
@@ -1988,22 +2058,136 @@ function sculptHand() {
 }
 
 
-/* ---------- o Recolhedor: magro, curvado, altura humana (escamas de bilhetes vêm depois) ---------- */
+/* ---------- peças de gente: cabeça, braço com mão, perna com pé (y para cima, frente em +z) ----------
+   Servem para montar as figuras parecidas com ela (a outra, quem acorda, o vulto, a gente de papel)
+   e as que só lembram gente (o Recolhedor, a Costureira, o Datilógrafo). */
+const V3 = {
+  add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
+  mul: (a, k) => [a[0] * k, a[1] * k, a[2] * k], lerp: (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t],
+  norm: a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; },
+  cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
+  sum: (...v) => v.reduce((s, x) => [s[0] + x[0], s[1] + x[1], s[2] + x[2]], [0, 0, 0]),
+};
+const HUM = {
+  /* c = centro do crânio; s = escala. o.boca escava uma fenda (as costuradas e as que sorriem têm boca) */
+  head(c, s = 1, o = {}) {
+    const [x, y, z] = c;
+    return [
+      { t: 'e', c: [x, y + .012 * s, z - .012 * s], r: [.092 * s, .11 * s, .112 * s], k: .03 * s },                 // crânio
+      { t: 'e', c: [x, y - .05 * s, z + .042 * s], r: [.068 * s, .07 * s, .07 * s], k: .045 * s },                 // maxilar
+      { t: 'e', c: [x, y - .1 * s, z + .072 * s], r: [.034 * s, .026 * s, .03 * s], k: .03 * s },                  // queixo
+      { t: 'e', c: [x, y + .032 * s, z + .086 * s], r: [.068 * s, .017 * s, .028 * s], k: .02 * s },               // arco das sobrancelhas
+      { t: 'c', a: [x, y + .022 * s, z + .1 * s], b: [x, y - .03 * s, z + .118 * s], r1: .01 * s, r2: .016 * s, k: .014 * s },   // nariz
+      ...mirror(m => [
+        { t: 'e', c: [x + .034 * m * s, y + .006 * s, z + .1 * s], r: [.021 * s, .014 * s, .02 * s], sub: 1, k: .012 * s },  // órbitas
+        { t: 'e', c: [x + .09 * m * s, y - .006 * s, z - .004 * s], r: [.012 * s, .03 * s, .021 * s], k: .012 * s },       // orelhas
+        { t: 'e', c: [x + .052 * m * s, y - .028 * s, z + .072 * s], r: [.028 * s, .026 * s, .028 * s], k: .03 * s },      // maçãs do rosto
+      ]).flat(),
+      ...(o.boca ? [{ t: 'e', c: [x, y - .068 * s, z + .106 * s], r: [.023 * s, .0042 * s, .011 * s], sub: 1, k: .004 * s }] : []),
+    ];
+  },
+  /* mão no fim do antebraço: a palma segue a direção do braço; quatro dedos em leque de trás para a frente e o
+     polegar para a frente e para dentro. o.dedos = comprimento relativo; o.curva = o quanto dobram; o.pontas
+     recebe a ponta de cada dedo (para garras e unhas pintadas) */
+  hand(m, wr, dir, o = {}) {
+    const s = o.s ?? 1, L = (o.dedos ?? 1) * s, curl = o.curva ?? .25, d = V3.norm(dir);
+    let sp = V3.norm(V3.cross(d, [1, 0, 0])); if (sp[2] < 0) sp = V3.mul(sp, -1);                       // de trás para a frente, ao longo da palma
+    let pin = V3.norm(V3.cross(sp, d)); if (pin[0] * m > 0) pin = V3.mul(pin, -1);                  // para o lado do corpo
+    const p0 = V3.add(wr, V3.mul(d, .008 * s)), p1 = V3.add(wr, V3.mul(d, .072 * s));
+    const P = [
+      { t: 'c', a: p0, b: p1, r1: .022 * s, r2: .025 * s, k: .02 * s },                                          // palma
+      { t: 'c', a: V3.add(p0, V3.mul(sp, -.008 * s)), b: V3.add(p1, V3.mul(sp, -.012 * s)), r1: .018 * s, r2: .02 * s, k: .02 * s },
+    ];
+    [-1.5, -.5, .5, 1.5].forEach((f, i) => {
+      const len = [.052, .066, .07, .064][i] * L, base = V3.add(p1, V3.mul(sp, f * .0125 * s));
+      const mid = V3.sum(base, V3.mul(d, len * .52), V3.mul(pin, len * .18 * curl * 2));
+      const tip = V3.sum(base, V3.mul(d, len * (1 - curl * .3)), V3.mul(pin, len * .5 * curl * 2));
+      P.push({ t: 'c', a: base, b: mid, r1: .0092 * s, r2: .0082 * s, k: .006 * s }, { t: 'c', a: mid, b: tip, r1: .0082 * s, r2: .0066 * s, k: .005 * s });
+      if (o.pontas) o.pontas.push(tip);
+    });
+    const tb = V3.sum(wr, V3.mul(d, .018 * s), V3.mul(sp, .022 * s), V3.mul(pin, .01 * s));
+    const tt = V3.sum(tb, V3.mul(d, .042 * s * (o.dedos ?? 1)), V3.mul(sp, .018 * s), V3.mul(pin, .016 * s));
+    P.push({ t: 'c', a: tb, b: tt, r1: .0125 * s, r2: .0085 * s, k: .01 * s });                                    // polegar
+    return P;
+  },
+  /* braço: ombro, cotovelo e pulso; o.r engrossa ou afina; o.mao vai para a mão; o.semMao para os que terminam em outra coisa */
+  arm(m, sh, el, wr, o = {}) {
+    const r = o.r ?? 1;
+    return [
+      { t: 'e', c: sh, r: [.05 * r, .056 * r, .052 * r], k: .04 * r },                                             // ombro
+      { t: 'c', a: sh, b: el, r1: .042 * r, r2: .031 * r, k: .03 * r },
+      { t: 'c', a: V3.lerp(sh, el, .18), b: V3.lerp(sh, el, .6), r1: .045 * r, r2: .036 * r, k: .03 * r },           // bíceps
+      { t: 'e', c: el, r: [.03 * r, .03 * r, .03 * r], k: .02 * r },                                                // cotovelo
+      { t: 'c', a: el, b: wr, r1: .033 * r, r2: .021 * r, k: .025 * r },
+      { t: 'c', a: V3.lerp(el, wr, .08), b: V3.lerp(el, wr, .45), r1: .036 * r, r2: .03 * r, k: .02 * r },          // antebraço
+      ...(o.semMao ? [] : HUM.hand(m, wr, V3.sub(wr, el), Object.assign({ s: r * 1.05 }, o.mao))),
+    ];
+  },
+  /* perna em pé: quadril, joelho e tornozelo; o pé aponta para a frente */
+  leg(m, hip, kn, an, o = {}) {
+    const r = o.r ?? 1, pe = o.pe ?? 1, cal = V3.lerp(kn, an, .28);
+    const heel = [an[0], .034, an[2] - .035 * pe], toe = [an[0] + .012 * m, .022, an[2] + .165 * pe];
+    return [
+      { t: 'c', a: hip, b: kn, r1: .08 * r, r2: .046 * r, k: .05 * r },                                            // coxa
+      { t: 'c', a: V3.lerp(hip, kn, .1), b: V3.lerp(hip, kn, .6), r1: .084 * r, r2: .06 * r, k: .04 * r },
+      { t: 'e', c: [kn[0], kn[1], kn[2] + .022 * r], r: [.038 * r, .042 * r, .034 * r], k: .025 * r },             // joelho
+      { t: 'c', a: kn, b: an, r1: .044 * r, r2: .026 * r, k: .03 * r },                                            // canela
+      { t: 'e', c: [cal[0], cal[1], cal[2] - .022 * r], r: [.042 * r, .085 * r, .042 * r], k: .04 * r },           // panturrilha
+      { t: 'e', c: an, r: [.029 * r, .026 * r, .028 * r], k: .02 * r },                                            // tornozelo
+      { t: 'c', a: an, b: heel, r1: .028 * r, r2: .03 * r, k: .02 * r },
+      { t: 'c', a: heel, b: toe, r1: .03 * r, r2: .024 * r, k: .03 * r },                                          // pé
+      { t: 'e', c: [toe[0], .019, toe[2] - .022 * pe], r: [.038 * r, .019 * r, .035 * r], k: .02 * r },           // dedos
+    ];
+  },
+};
+
+/* ---------- gente: em pé, braços caídos, a altura dela; o molde de quem se parece com ela ---------- */
+let PERSON_GEO = null;
+function sculptPerson() {
+  if (PERSON_GEO) return new T3.Mesh(PERSON_GEO, new T3.MeshLambertMaterial({ vertexColors: true }));
+  const P = [
+    ...HUM.head([0, 1.875, .195], 1, { boca: 1 }),
+    { t: 'c', a: [0, 1.6, .08], b: [0, 1.8, .165], r1: .054, r2: .047, k: .045 },                                  // pescoço
+    { t: 'e', c: [0, 1.585, .075], r: [.185, .052, .085], k: .06 },                                                 // linha dos ombros
+    { t: 'e', c: [0, 1.42, .08], r: [.158, .17, .112], k: .08 },                                                    // peito
+    { t: 'c', a: [0, 1.12, .06], b: [0, 1.32, .075], r1: .112, r2: .125, k: .08 },                                  // cintura
+    { t: 'e', c: [0, 1.0, .04], r: [.152, .1, .1], k: .07 },                                                       // quadril
+    { t: 'c', a: [0, 1.14, -.055], b: [0, 1.52, -.04], r1: .012, sub: 1, k: .02 },                                 // o sulco das costas
+    ...mirror(m => [
+      { t: 'c', a: [.02 * m, 1.605, .14], b: [.16 * m, 1.6, .1], r1: .013, k: .02 },                               // clavículas
+      { t: 'e', c: [.085 * m, 1.61, .045], r: [.085, .042, .05], k: .05 },                                          // trapézio
+      { t: 'e', c: [.075 * m, .95, -.035], r: [.078, .088, .068], k: .05 },                                         // glúteos
+      { t: 'e', c: [.07 * m, 1.47, -.035], r: [.06, .07, .04], k: .05 },                                          // omoplatas
+      ...HUM.arm(m, [.198 * m, 1.535, .07], [.232 * m, 1.2, .055], [.24 * m, .935, .09]),
+      ...HUM.leg(m, [.085 * m, .97, .04], [.085 * m, .54, .055], [.08 * m, .09, .015]),
+    ]).flat(),
+  ];
+  const mesh = meshSDF(makeSDF(P, { noise: .0025, freq: 13 }), [-.36, -.02, -.2], [.36, 2.04, .42], .012, 0x8a8a86, 0x1e1e1c);
+  PERSON_GEO = mesh.geometry; return mesh;
+}
+
+/* ---------- membros soltos, esculpidos (braços que se mexem à parte do corpo) ---------- */
+function sculptLimb(P, min, max, cell, color, ao) { return meshSDF(makeSDF(P, { noise: .002, freq: 14 }), min, max, cell ?? .01, color, ao ?? 0x141413); }
+
+/* ---------- o Recolhedor: magro, curvado, altura humana, mãos compridas (escamas de bilhetes vêm depois);
+   o braço direito é à parte (o que toca o ombro dela) ---------- */
 function sculptCollector() {
   const P = [
-    ...mirror(s => [
-      { t: 'c', a: [.1 * s, .03, 0], b: [.1 * s, .86, 0], r1: .042, r2: .058, k: .03 },
-      { t: 'e', c: [.1 * s, .025, .07], r: [.038, .024, .1], k: .02 },
+    ...HUM.head([0, 1.87, .2], 1.02),
+    { t: 'c', a: [0, 1.6, .1], b: [0, 1.79, .18], r1: .042, r2: .037, k: .035 },                                   // pescoço
+    { t: 'e', c: [0, 1.585, .1], r: [.2, .055, .085], k: .06 },                                                    // ombros
+    { t: 'e', c: [0, 1.42, .085], r: [.14, .16, .098], k: .07 },                                                   // peito estreito
+    { t: 'c', a: [0, 1.03, .0], b: [0, 1.3, .06], r1: .092, r2: .11, k: .07 },                                    // cintura funda
+    { t: 'e', c: [0, .96, 0], r: [.135, .085, .085], k: .06 },                                                     // quadril
+    ...[1.12, 1.2, 1.28, 1.36, 1.44, 1.52].map((y, i) => ({ t: 'e', c: [0, y, -.032 + i * .012], r: [.018, .02, .022], k: .015 })),   // a espinha
+    ...mirror(m => [
+      ...[1.26, 1.33, 1.4].map(y => ({ t: 'c', a: [.03 * m, y + .02, .17], b: [.13 * m, y - .02, .1], r1: .011, k: .018 })),   // costelas
+      { t: 'c', a: [.02 * m, 1.6, .16], b: [.17 * m, 1.6, .12], r1: .012, k: .02 },                              // clavículas
+      ...HUM.leg(m, [.09 * m, .95, 0], [.095 * m, .5, .02], [.095 * m, .085, 0], { r: .72, pe: 1.15 }),
     ]).flat(),
-    { t: 'e', c: [0, .95, 0], r: [.15, .12, .11], k: .06 },
-    { t: 'c', a: [0, .95, 0], b: [0, 1.55, .09], r1: .14, r2: .16, k: .08 },
-    { t: 'e', c: [0, 1.58, .1], r: [.21, .07, .1], k: .06 },
-    { t: 'c', a: [0, 1.6, .1], b: [0, 1.76, .19], r1: .045, r2: .04, k: .03 },
-    { t: 'e', c: [0, 1.87, .21], r: [.1, .13, .11], k: .03 },
-    { t: 'c', a: [-.21, 1.56, .08], b: [-.25, .96, .1], r1: .035, r2: .03, k: .03 },
-    { t: 'c', a: [-.25, .96, .1], b: [-.24, .44, .13], r1: .03, r2: .024, k: .02 },
+    ...HUM.arm(-1, [-.2, 1.54, .1], [-.25, .97, .1], [-.245, .5, .13], { r: .78, mao: { dedos: 1.9, curva: .12 } }),
   ];
-  return meshSDF(makeSDF(P, { noise: .003, freq: 12 }), [-.42, -.03, -.25], [.42, 2.04, .4], .014, 0x5a5a57, 0x161615);
+  return meshSDF(makeSDF(P, { noise: .003, freq: 12 }), [-.42, -.03, -.25], [.42, 2.04, .4], .012, 0x5a5a57, 0x161615);
 }
 
 /* ============================================================
@@ -2286,10 +2470,9 @@ function buildWorld() {
   }
   plane(.2, .25, M(0xffffff, { map: TEX.collFace }), 0, 1.86, .325, -.1, 0, CO);   // o bilhete no lugar do rosto
   const cArm = new T3.Group(); cArm.position.set(.21, 1.56, .08); CO.add(cArm); OBJ.collArm = cArm;
-  const am = M(0x8d8d8a);
-  limb(v3(0, 0, 0), v3(.03, -.55, .02), .034, am, cArm, .03); limb(v3(.03, -.55, .02), v3(.02, -1.02, .05), .028, am, cArm, .024);
-  ball(.035, am, .02, -1.07, .06, 1, 1.3, .7, cArm);
-  [-.025, -.008, .009, .026].forEach(dx => { const tip = v3(.02 + dx, -1.3 + Math.abs(dx) * 2, .07); limb(v3(.02 + dx, -1.1, .06), tip, .008, am, cArm); ball(.011, MB(0xc3120c), tip.x, tip.y - .006, tip.z, 1, 1.2, 1, cArm); });
+  { const pontas = [];
+    cArm.add(sculptLimb(HUM.arm(1, [-.01, .02, .02], [.03, -.55, .02], [.02, -1.02, .05], { r: .78, mao: { dedos: 1.9, curva: .12, pontas } }), [-.15, -1.4, -.15], [.18, .1, .2], .011, 0x5a5a57, 0x161615));
+    pontas.forEach(p => ball(.0095, MB(0xc3120c), p[0], p[1] - .003, p[2], 1, 1.3, 1, cArm)); }                // as pontas dos dedos, vermelhas
 
   /* -- 3. a sala branca dos buracos -- */
   const Wr = new T3.Group(); Wr.position.set(120, 0, 0); scene.add(Wr); OBJ.white = Wr;
@@ -2329,15 +2512,11 @@ function buildWorld() {
   const trim = M(0xdedede); box(.06, 2.16, .08, trim, -.53, 1.08, 2.99, Wr); box(.06, 2.16, .08, trim, .53, 1.08, 2.99, Wr); box(1.12, .06, .08, trim, 0, 2.15, 2.99, Wr);
 
   const CRP = new T3.Group(); CRP.position.set(-.7, 1.5, -3.0); Wr.add(CRP); OBJ.creepy = CRP; CRP.visible = false;
-  const gm = M(0xc9c9c9), arm = new T3.Group(); CRP.add(arm); OBJ.creepyArm = arm; arm.position.z = -.7;
-  limb(v3(0, .02, -.6), v3(0, -.02, .3), .032, gm, arm, .026);
-  ball(.05, gm, 0, -.05, .34, 1, .8, 1.25, arm);
-  for (let i = 0; i < 4; i++) {
-    const a = v3(-.042 + i * .028, -.07, .36), b = v3(-.05 + i * .033, -.2, .38);
-    limb(a, b, .009, gm, arm);
-    const cl = new T3.Mesh(new T3.ConeGeometry(.008, .07, 5), M(0x111111)); cl.position.set(b.x, b.y - .035, b.z); cl.rotation.x = Math.PI; arm.add(cl);
-  }
-  limb(v3(.05, -.06, .3), v3(.06, -.16, .27), .011, gm, arm);
+  const arm = new T3.Group(); CRP.add(arm); OBJ.creepyArm = arm; arm.position.z = -.7;
+  { const pontas = [], wr = [0, -.03, .31];
+    arm.add(sculptLimb([{ t: 'c', a: [0, .02, -.6], b: [0, -.025, .3], r1: .034, r2: .025, k: .02 }, { t: 'c', a: [0, .01, -.4], b: [0, -.015, .1], r1: .038, r2: .032, k: .03 },
+      ...HUM.hand(1, wr, [0, -1, .18], { s: 1.25, dedos: 1.35, curva: .5, pontas })], [-.12, -.32, -.65], [.12, .08, .5], .009, 0xc9c9c9, 0x3a3a38));
+    pontas.forEach(p => { const cl = new T3.Mesh(new T3.ConeGeometry(.0075, .055, 5), M(0x111111)); cl.position.set(p[0], p[1] - .02, p[2] - .004); cl.rotation.x = Math.PI * .97; arm.add(cl); }); }   // unhas pretas
   const ct = new T3.Group(); ct.position.set(0, -.24, .37); arm.add(ct); OBJ.creepyTorch = ct;
   const cb = new T3.Mesh(new T3.CylinderGeometry(.032, .032, .26, 12), M(0x2a2a2a)); ct.add(cb);
   const chd = new T3.Mesh(new T3.CylinderGeometry(.06, .045, .08, 14), M(0x262626)); chd.position.y = -.16; ct.add(chd);
@@ -2390,11 +2569,18 @@ function buildWorld() {
   /* -- 5. o ser alto: pernas imensas -- */
   const prof = [[.001, 0], [.075, .02], [.06, .22], [.07, .5], [.11, 1.2], [.125, 1.75], [.105, 2.4], [.085, 2.95], [.105, 3.15], [.09, 3.4], [.11, 4.4], [.13, 6], [.15, 8], [.16, 9.6]].map(p => new T3.Vector2(p[0], p[1]));
   const legGeo = new T3.LatheGeometry(prof, 12), legMat = M(0xededed, { map: TEX.streak });
+  // o pé: comprido, magro, quatro dedos longos apontando para a frente (−z)
+  const footGeo = meshSDF(makeSDF([
+    { t: 'e', c: [0, .06, .05], r: [.07, .06, .08], k: .04 }, { t: 'c', a: [0, .1, .0], b: [0, .045, -.2], r1: .062, r2: .05, k: .05 },
+    { t: 'e', c: [0, .16, .02], r: [.07, .08, .07], k: .05 },
+    ...[-.045, -.015, .015, .045].map((d, i) => ({ t: 'c', a: [d, .04, -.19], b: [d * 1.5, .016, -.42 + Math.abs(i - 1.5) * .04], r1: .019, r2: .012, k: .015 })),
+  ], { noise: .003, freq: 9 }), [-.14, -.01, -.5], [.14, .26, .16], .014, 0xd8d8d6, 0x4a4a48).geometry;
   const makeBeing = (x, z, rotY) => {
     const g = new T3.Group(); g.position.set(x, 0, z); g.rotation.y = rotY; F.add(g);
     [-.28, .28].forEach(dx => {
       const l = new T3.Mesh(legGeo, legMat); l.position.x = dx; l.rotation.z = dx * -.03; g.add(l);
-      box(.12, .05, .26, legMat, dx, .025, -.1, g);
+      const pe = new T3.Mesh(footGeo, new T3.MeshLambertMaterial({ vertexColors: true })); pe.position.x = dx; pe.rotation.y = dx * .25; pe.scale.setScalar(1.6); g.add(pe);
+      ball(.07, legMat, dx, 3.16, -.07, 1, 1.25, .6, g);                                     // a rótula, dura sob a pele
       ball(.035, M(0x222222), dx, 2.98, -.09, 1, 1.4, .6, g);
     });
     ball(.75, M(0x1b1b1b), 0, 10.2, 0, 1, 1.1, .8, g);
@@ -2568,16 +2754,16 @@ function buildPortas() {
   });
   TEX.dial = ctex(256, 128, (x) => { x.strokeStyle = '#1a1a1a'; x.lineWidth = 5; x.beginPath(); x.arc(128, 120, 96, Math.PI, 0); x.stroke(); [-.7, 0, .7].forEach(a => wobLine(x, [[128 + Math.sin(a) * 80, 120 - Math.cos(a) * 80], [128 + Math.sin(a) * 100, 120 - Math.cos(a) * 100]], .5)); });
   TEX.smudge = ctex(64, 64, (x) => { x.fillStyle = 'rgba(195,18,12,.85)'; for (let k = 0; k < 7; k++) { x.beginPath(); x.ellipse(32 + R(-6, 6), 32 + R(-6, 6), R(6, 14), R(8, 16), R(0, 3), 0, 7); x.fill(); } });
-  const body = OBJ.collector.children[0].geometry;          // o corpo magro do Recolhedor serve de molde
+  const body = sculptPerson().geometry;                      // o molde de gente (a mesma altura dela)
 
   /* ---------- portas do corredor vermelho, abrindo ---------- */
   const C = OBJ.corr;
   const oldLeaf = new T3.Group(); oldLeaf.position.set(6.7, 0, -9.99); C.add(oldLeaf); OBJ.oldLeaf = oldLeaf; oldLeaf.visible = false;
   box(1, 2.1, .06, M(0x8a8a8a), .5, 1.05, 0, oldLeaf); box(.06, .14, .02, M(0xe6e6e6), .88, 1.0, .04, oldLeaf);
-  OBJ.oldDark = plane(1, 2.1, MB(0x050505), 7.2, 1.05, -10, 0, 0, C); OBJ.oldDark.visible = false;
+  OBJ.oldDark = plane(1, 2.1, MB(0x050505), 7.2, 1.05, -9.985, 0, 0, C); OBJ.oldDark.visible = false;
   const newLeaf = new T3.Group(); newLeaf.position.set(-.5, 0, 0); OBJ.newDoor.add(newLeaf); OBJ.newLeaf = newLeaf; newLeaf.visible = false;
   box(1, 2.1, .06, M(0x5e5e5e), .5, 1.05, 0, newLeaf); box(.08, .2, .02, M(0x3a3a3a), .86, 1.0, .04, newLeaf);
-  OBJ.newDark = plane(1, 2.1, MB(0x050505), 0, 1.05, -.01, 0, 0, OBJ.newDoor); OBJ.newDark.visible = false;
+  OBJ.newDark = plane(1, 2.1, MB(0x050505), 0, 1.05, .005, 0, 0, OBJ.newDoor); OBJ.newDark.visible = false;
 
   /* ---------- 1. a sala dos espelhos (x = 180) ----------
      4 × 5 m. Espelho descoberto no fundo (z = −2,5) e outro, coberto, na parede direita (x = 2).
@@ -2628,11 +2814,10 @@ function buildPortas() {
   // a outra: a mesma altura, cabelo escuro, pele de cera, sorriso; espera no reflexo da direita
   const DB = new T3.Group(); DB.position.set(4.0, 0, -.9); DB.rotation.y = -Math.PI / 2; MR.add(DB); OBJ.double = DB; DB.visible = false;
   DB.add(new T3.Mesh(body, M(0xd6d4cc)));
-  plane(.15, .075, MB(0xffffff, { map: TEX.grin, transparent: true }), 0, 1.8, .322, -.1, 0, DB);
+  overlayOnly(plane(.15, .075, MB(0xffffff, { map: TEX.grin, transparent: true, depthWrite: false }), 0, 1.8, .315, -.1, 0, DB));   // o sorriso, sem contorno de papel
   [-.036, .036].forEach(dx => ball(.022, MB(0x050505), dx, 1.9, .3, 1, .8, .5, DB));
   ball(.105, MB(0x111111), 0, 1.95, .19, 1.08, .85, 1.05, DB);                                  // cabelo escuro, pelas costas e pelos lados
   for (let i = 0; i < 18; i++) { const a = Math.PI + (i / 17 - .5) * 3.9; box(.016, R(.5, .7), .012, MB(0x111111), Math.sin(a) * .105, 1.68, .2 + Math.cos(a) * .1, DB).rotation.z = Math.sin(a) * .06; }
-  limb(v3(.21, 1.56, .08), v3(.24, 1.02, .1), .032, DB.children[0].material, DB, .028); limb(v3(.24, 1.02, .1), v3(.24, .5, .12), .026, DB.children[0].material, DB, .022);
 
   /* ---------- 2. o avesso da parede dos buracos (atrás da sala branca) ---------- */
   const AV = new T3.Group(); OBJ.white.add(AV); PLACE.avesso = AV;
@@ -2659,10 +2844,11 @@ function buildPortas() {
     for (let i = 0; i < 9; i++) box(.015, 2.1, .015, dk, i * .15, 1.05, 0, gr);
     [.1, 1.05, 2.08].forEach(y => box(1.22, .03, .03, dk, .6, y, 0, gr));
     for (let i = 0; i < 8; i++) { box(.01, .2, .01, dk, i * .15 + .075, .6, 0, gr).rotation.z = .6; box(.01, .2, .01, dk, i * .15 + .075, 1.6, 0, gr).rotation.z = -.6; }
-    const pn = new T3.Group(); pn.position.set(.69, 1.3, .3); pn.rotation.y = -Math.PI / 2; g.add(pn);   // três botões sem número
+    const pn = new T3.Group(); pn.position.set(.69, 1.3, .3); pn.rotation.y = -Math.PI / 2; g.add(pn);   // quatro botões sem número
     box(.14, .42, .02, M(0x8a8a86), 0, 0, 0, pn);
-    const btns = [.12, 0, -.12].map(y => { const b = new T3.Mesh(new T3.CylinderGeometry(.026, .026, .02, 14), M(0xe8e8e2)); b.rotation.x = Math.PI / 2; b.position.set(0, y, .02); pn.add(b); return b; });
-    plane(.07, .07, decal(TEX.smudge), .005, -.125, .032, 0, 0, pn);                           // o de baixo tem dedo vermelho
+    const btns = [.15, .05, -.05, -.15].map(y => { const b = new T3.Mesh(new T3.CylinderGeometry(.026, .026, .02, 14), M(0xe8e8e2)); b.rotation.x = Math.PI / 2; b.position.set(0, y, .02); pn.add(b); return b; });
+    plane(.07, .07, decal(TEX.smudge), .005, -.155, .032, 0, 0, pn);                           // o de baixo tem dedo vermelho
+    plane(.035, .035, decal(TEX.redArrow), .052, -.05, .012, 0, 0, pn);                        // o de cima dele, uma seta vermelha: de volta ao corredor
     ball(.045, MB(0xffffff), 0, 2.33, 0, 1, 1.2, 1, g);
     const L = new T3.PointLight(0xfff4e8, .8, 3.4, 1.6); L.position.set(0, 2.1, 0); g.add(L);
     return { g, grate: gr, light: L, btns };
@@ -2751,7 +2937,7 @@ function buildPortas() {
     const FG = new T3.Group(); FG.position.set(.3, -.25, FLOODZ[0]); FL.add(FG); OBJ.floodFig = FG;           // de costas, parado na água
     FG.add(new T3.Mesh(body, M(0x6a6a66)));
     const face = new T3.Group(); FG.add(face); OBJ.floodFace = face; face.visible = false;
-    plane(.16, .08, MB(0xffffff, { map: TEX.grin, transparent: true }), 0, 1.8, .322, -.1, 0, face);
+    overlayOnly(plane(.16, .08, MB(0xffffff, { map: TEX.grin, transparent: true, depthWrite: false }), 0, 1.8, .315, -.1, 0, face));
     [-.036, .036].forEach(dx => ball(.024, MB(0xff2a17), dx, 1.9, .3, 1, .8, .5, face)); }
 
   resetPortas();
@@ -2783,7 +2969,7 @@ const FX_PORTAS = {
     const b = OBJ.sheetBack; b.visible = false; b.scale.y = 1; b.position.y = 0; OBJ.sheetFloor.visible = true;
   },
   // o botão de baixo: ela aperta e ele não afunda
-  btnStuck() { const b = CAB.elev.btns[2]; [0, .35].forEach(t => tween({ delay: t, dur: .18, ease: 'lin', on: k => { b.position.z = .02 - Math.sin(k * Math.PI) * .0015; } })); },
+  btnStuck() { const b = CAB.elev.btns[3]; [0, .35].forEach(t => tween({ delay: t, dur: .18, ease: 'lin', on: k => { b.position.z = .02 - Math.sin(k * Math.PI) * .0015; } })); },
   sheetFall() {
     const s = OBJ.sheetRight;
     tween({ dur: .7, ease: 'in', on: k => { s.scale.y = Math.max(.05, 1 - k); s.position.y = -k * .1; s.rotation.z = k * .2; }, done: () => { s.visible = false; OBJ.sheetFloor2.visible = true; } });
@@ -2800,6 +2986,7 @@ const FX_PORTAS = {
   },
   mirrorDim() { const L = OBJ.mirLamp1, i0 = L.intensity; tween({ dur: 3, ease: 'sine', on: k => { L.intensity = i0 * (1 - k) * (k > .6 ? (Math.random() > .5 ? 1 : .2) : 1); } }); },
   mirrorHoles() { OBJ.mirHoles.visible = true; OBJ.mirHoles.children.forEach(s => { s.material.opacity = 0; }); tween({ dur: 1.8, ease: 'sine', on: k => OBJ.mirHoles.children.forEach(s => { s.material.opacity = k * .8; }) }); },
+  mirrorCalm() { OBJ.mirLamp1.intensity = .9; OBJ.mirHoles.visible = false; OBJ.glassBack.material.opacity = .08; OBJ.glassBack.scale.set(1, 1, 1); },   // de volta à sala: o espelho do fundo assentou
   mirrorRipple() { const g = OBJ.glassBack; tween({ dur: 1.8, ease: 'in', on: (k, raw) => { g.material.opacity = .08 + k * .8; g.scale.set(1 + Math.sin(raw * 30) * .02 * k, 1 + Math.cos(raw * 26) * .02 * k, 1); } }); },
   // o avesso
   avesso() { const c = OBJ.creepy, a = OBJ.creepyArm; c.visible = true; OBJ.creepyTorch.visible = false; a.position.z = -.7; a.rotation.set(0, 0, 0); },
@@ -2888,16 +3075,17 @@ function sculptSeamstress() {
       { t: 'e', c: [.09 * s, .04, -.2], r: [.035, .03, .07], k: .03 },
       { t: 'c', a: [.15 * s, .6, .05], b: [.17 * s, .42, .22], r1: .036, r2: .031, k: .03 },
       { t: 'c', a: [.17 * s, .42, .22], b: [.06 * s, .36, .38], r1: .03, r2: .026, k: .02 },
-      { t: 'e', c: [.05 * s, .355, .4], r: [.03, .022, .04], k: .02 },
+      ...HUM.hand(s, [.065 * s, .36, .38], [-.4 * s, -.06, .5], { s: .85, curva: .45 }),
+      { t: 'e', c: [.07 * s, .7, -.0], r: [.055, .06, .035], k: .04 },                                // omoplatas
     ]).flat(),
     { t: 'c', a: [0, .24, -.06], b: [0, .58, .05], r1: .14, r2: .13, k: .08 },
     { t: 'e', c: [0, .56, .06], r: [.17, .1, .11], k: .06 },
-    { t: 'c', a: [0, .62, .08], b: [0, .69, .17], r1: .042, r2: .038, k: .03 },
-    { t: 'e', c: [0, .71, .25], r: [.08, .1, .09], k: .03 },
-    { t: 'e', c: [0, .75, .2], r: [.095, .1, .085], k: .03 },
-    { t: 'e', c: [0, .74, .11], r: [.05, .05, .05], k: .03 },
+    { t: 'c', a: [0, .6, .07], b: [0, .69, .17], r1: .046, r2: .04, k: .035 },                         // pescoço
+    ...HUM.head([0, .735, .225], .88, { boca: 1 }),
+    { t: 'e', c: [0, .772, .178], r: [.084, .08, .088], k: .012 },                                    // o cabelo, puxado para trás
+    { t: 'e', c: [0, .785, .1], r: [.05, .046, .045], k: .02 },                                       // o coque
   ];
-  return meshSDF(makeSDF(P, { noise: .003, freq: 12 }), [-.3, -.02, -.32], [.3, .86, .5], .013, 0x9a9a94, 0x1d1d1b);
+  return meshSDF(makeSDF(P, { noise: .003, freq: 12 }), [-.3, -.02, -.32], [.3, .86, .5], .011, 0x9a9a94, 0x1d1d1b);
 }
 function sculptTypist() {
   const P = [
@@ -2931,7 +3119,7 @@ function buildV12() {
   const decal = (t, o) => M(0xffffff, Object.assign({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }, o));
   const red = M(0xc3120c, { emissive: 0x3a0000 }), redB = MB(0xd0150e), ink = M(0x2a2a2a);
   const paperM = M(0xe8e6de, { map: TEX.paperBlank, side: T3.DoubleSide });
-  const body = OBJ.collector.children[0].geometry;
+  const body = sculptPerson().geometry;
   const floorStrip = (x1, z1, x2, z2, w, mat, parent, y = .004) => {
     const g = new T3.Group(); g.position.set((x1 + x2) / 2, y, (z1 + z2) / 2); g.rotation.y = Math.atan2(-(z2 - z1), x2 - x1); parent.add(g);
     plane(Math.hypot(x2 - x1, z2 - z1), w, mat, 0, 0, 0, -Math.PI / 2, 0, g); return g;
@@ -2994,6 +3182,19 @@ function buildV12() {
   OBJ.sleeper2 = person(OBJ.dark, 0xb8b8b4, true);                  // e chega à sala escura (o primeiro bilhete)
   // a chave presa na porta nova (caminho do elevador)
   OBJ.newKey = new T3.Group(); OBJ.newKey.position.set(.86, .97, .04); OBJ.newLeaf.add(OBJ.newKey); keyMesh(OBJ.newKey);
+  // a porta dos espelhos: sempre lá, trancada; um espelhinho oval na altura do rosto e uma fechadura de chave
+  const MD = new T3.Group(); MD.position.set(9.6, 0, -9.99); C.add(MD); OBJ.mirDoor = MD;
+  const mdM = M(0x767674), glassM = M(0xd2d6d8, { emissive: 0x1c1e20 }), rimM = M(0x2a2a28);
+  const oval = (g, x) => { const o = new T3.Mesh(new T3.CircleGeometry(.1, 24), glassM); o.scale.y = 1.45; o.position.set(x, 1.58, .034); g.add(o);
+    const r = new T3.Mesh(new T3.RingGeometry(.1, .125, 24), rimM); r.scale.y = 1.45; r.position.set(x, 1.58, .033); g.add(r); };
+  OBJ.mirClosed = new T3.Group(); MD.add(OBJ.mirClosed);
+  box(1, 2.1, .06, mdM, 0, 1.05, 0, OBJ.mirClosed); oval(OBJ.mirClosed, 0);
+  box(.07, .18, .02, M(0x3a3a3a), .36, 1.0, .04, OBJ.mirClosed); plane(.022, .055, MB(0x050505), .36, .97, .052, 0, 0, OBJ.mirClosed);
+  OBJ.mirKey = new T3.Group(); OBJ.mirKey.position.set(.36, .97, .04); OBJ.mirClosed.add(OBJ.mirKey); keyMesh(OBJ.mirKey); OBJ.mirKey.visible = false;
+  OBJ.mirLeaf = new T3.Group(); OBJ.mirLeaf.position.set(-.5, 0, 0); MD.add(OBJ.mirLeaf); OBJ.mirLeaf.visible = false;
+  box(1, 2.1, .06, mdM, .5, 1.05, 0, OBJ.mirLeaf); oval(OBJ.mirLeaf, .5); box(.07, .18, .02, M(0x3a3a3a), .86, 1.0, .04, OBJ.mirLeaf);
+  const mk = new T3.Group(); mk.position.set(.86, .97, .04); OBJ.mirLeaf.add(mk); keyMesh(mk);           // a chave fica presa na porta
+  OBJ.mirDark = plane(1, 2.1, MB(0x050505), 0, 1.05, .005, 0, 0, MD); OBJ.mirDark.visible = false;
 
   /* ---------- 2. sala branca: a parede escrita, a luz do chão, papéis por baixo da porta ---------- */
   const Wr = OBJ.white;
@@ -3028,7 +3229,7 @@ function buildV12() {
   [110, 140, 170, 200, 228, 255, 290, 320].forEach((deg, i) => {
     const a = deg * Math.PI / 180, r = 7.6 + (i % 3) * .7, x = CLEAR.x + Math.sin(a) * r, z = CLEAR.z + Math.cos(a) * r;
     const g = person(OBJ.paperPeople, 0xd9d6cc, false); g.position.set(x, 0, z); g.rotation.y = Math.atan2(CLEAR.x - x, CLEAR.z - z); g.scale.setScalar(R(.95, 1.08));
-    for (let k = 0; k < 5; k++) ball(.025, MB(0x0a0a0a), R(-.1, .1), R(.6, 1.7), .13, 1, 1, .3, g);   // furos de traça
+    for (let k = 0; k < 5; k++) { const y = R(.6, 1.7); ball(.025, MB(0x0a0a0a), R(-.09, .09), y, y > 1.05 ? .19 : .12, 1, 1, .3, g); }   // furos de traça
   });
   OBJ.doorOut = new T3.PointLight(0xffffff, 0, 6, 1.6); OBJ.doorOut.position.set(120.4, 2.6, 5.2); F.add(OBJ.doorOut);   // a porta do quarto vista de fora
   OBJ.ribbonFallen = new T3.Mesh(new T3.TubeGeometry(new T3.CatmullRomCurve3(OBJ.ribbonPts.map(p => v3(p.x + R(-.3, .3), .03, p.z))), 200, .011, 5), MB(0xd0150e)); F.add(OBJ.ribbonFallen);
@@ -3056,7 +3257,7 @@ function buildV12() {
   OBJ.tally = plane(5.6, 2.1, MB(0xffffff, { map: TEX.tally, transparent: true, depthWrite: false, fog: false }), 0, 1.75, 20.6, 0, Math.PI, FLp);
   OBJ.tallyNew = plane(.07, .5, MB(0xd0150e, { fog: false }), 2.45, 1.7, 20.58, 0, Math.PI, FLp); OBJ.tallyNew.rotation.z = .5;
   OBJ.floodArm = new T3.Group(); OBJ.floodArm.position.set(-.2, 1.5, 0); OBJ.floodFig.add(OBJ.floodArm);
-  { const am = M(0x6a6a66); limb(v3(0, 0, 0), v3(-.1, -.2, -1.0), .03, am, OBJ.floodArm, .026); limb(v3(-.1, -.2, -1.0), v3(.05, -.25, -2.0), .026, am, OBJ.floodArm, .022); ball(.035, am, .05, -.27, -2.05, 1, .8, 1.3, OBJ.floodArm); }
+  OBJ.floodArm.add(sculptLimb(HUM.arm(-1, [0, 0, 0], [-.1, -.2, -1.0], [.05, -.25, -2.0], { r: .75, mao: { dedos: 1.7, curva: .35 } }), [-.3, -.5, -2.35], [.3, .12, .12], .012, 0x6a6a66));
   const AR = PLACE.cima;
   OBJ.newPack = new T3.Group(); OBJ.newPack.position.set(1.55, 1.0, 5.5); AR.add(OBJ.newPack);
   box(.34, .16, .24, M(0xf4f2ea, { map: TEX.plaster }), 0, 0, 0, OBJ.newPack); box(.35, .17, .014, red, 0, 0, 0, OBJ.newPack); box(.014, .17, .25, red, 0, 0, 0, OBJ.newPack);
@@ -3100,7 +3301,7 @@ function buildV12() {
   const SK = new T3.Group(); SK.position.copy(SEAM).sub(GC.position); SK.rotation.y = -Math.PI / 2; GC.add(SK); OBJ.seamKneel = SK;
   const SB = new T3.Group(); SB.position.y = .2; SK.add(SB); OBJ.seamBody = SB;
   const sm = sculptSeamstress(); sm.position.y = -.2; SB.add(sm);
-  [-.025, 0, .025].forEach(x => box(.006, .03, .006, redB, x, .468, .336, SB));   // a boca costurada
+  [-.025, 0, .025].forEach(x => box(.006, .03, .006, redB, x, .474, .318, SB));   // a boca costurada
   box(.28, .05, .2, M(0xe2e0d8, { map: TEX.plaster }), 0, .05, .13, SB); box(.28, .004, .004, redB, 0, .077, .13, SB);
   OBJ.needle = box(.003, .06, .003, M(0xdadad6), .05, .19, .4, SB); limb(v3(.05, .16, .4), v3(.0, .08, .2), .0015, redB, SB);
   OBJ.cloth = plane(.3, .22, M(0xffffff, { map: TEX.cloth, side: T3.DoubleSide }), 0, .42, .5, 0, 0, SB);
@@ -3110,7 +3311,7 @@ function buildV12() {
   const ST = person(GC, 0x9a9a94, true); OBJ.seamStand = ST; ST.rotation.y = Math.PI;
   [-.02, .005, .03].forEach(x => box(.006, .03, .006, redB, x, 1.79, .325, ST));
   OBJ.standStitch = ST.children[ST.children.length - 1];
-  box(.003, .07, .003, M(0xdadad6), .25, .95, .12, ST);
+  box(.003, .07, .003, M(0xdadad6), .262, .8, .14, ST);                                // a agulha, entre os dedos
   /* a cortina: folhas costuradas de chão a teto, fechando o canto dela enquanto ela não pode ser vista */
   TEX.curtain = ctex(256, 512, (x, w, h) => {
     x.fillStyle = '#d4d2ca'; x.fillRect(0, 0, w, h);
@@ -3213,9 +3414,13 @@ function buildV12() {
   const HD = new T3.Group(); HD.position.set(0, 1.98, .64); HD.rotation.x = 1.35; TY.add(HD); OBJ.typistHead = HD;
   ball(.11, M(0x6e6e6a), 0, 0, .06, 1, 1.2, 1, HD); OBJ.typistFace = plane(.17, .22, M(0xf1f0ea, { side: T3.DoubleSide }), 0, -.01, .17, 0, 0, HD);
   OBJ.typistArms = [-1, 1].map(s => {
-    const g = new T3.Group(); g.position.set(.25 * s, 1.9, .45); TY.add(g); const gm = M(0x8a8a86);
-    limb(v3(0, 0, 0), v3(.08 * s, -.42, .25), .034, gm, g, .03); limb(v3(.08 * s, -.42, .25), v3(-.02 * s, -.58, .72), .028, gm, g, .024); ball(.04, gm, -.02 * s, -.6, .76, 1, .7, 1.2, g);
-    for (let i = 0; i < 4; i++) { const b = v3(-.02 * s + (i - 1.5) * .028, -.66, .82); limb(v3(-.02 * s + (i - 1.5) * .024, -.61, .78), b, .008, gm, g); const c = new T3.Mesh(new T3.ConeGeometry(.007, .05, 5), M(0x111111)); c.position.set(b.x, b.y - .02, b.z + .01); c.rotation.x = Math.PI * .9; g.add(c); }
+    const g = new T3.Group(); g.position.set(.25 * s, 1.9, .45); TY.add(g);
+    const pontas = [], wr = [-.02 * s, -.58, .72];
+    g.add(sculptLimb(HUM.arm(s, [0, 0, 0], [.08 * s, -.42, .25], wr, { r: .8, mao: { dedos: 1.7, curva: .55, pontas } }), [-.25, -.9, -.1], [.25, .1, 1.05], .011, 0x8a8a86));
+    pontas.forEach(p => {                                                     // as garras pretas na ponta de cada dedo
+      const c = new T3.Mesh(new T3.ConeGeometry(.007, .05, 5), M(0x111111)); c.position.set(p[0], p[1] - .015, p[2] + .008);
+      c.quaternion.setFromUnitVectors(v3(0, 1, 0), v3(p[0] - wr[0], p[1] - wr[1], p[2] - wr[2]).normalize()); g.add(c);
+    });
     return g;
   });
 
@@ -3273,11 +3478,35 @@ const FX_V12 = {
   padFall() { const p = OBJ.padlock; FX_V12.padOpen(); const y0 = p.position.y; tween({ delay: .4, dur: .9, ease: 'in', on: k => { p.position.y = y0 - k * (y0 - .06); p.position.z = -9.93 + k * .25; p.rotation.z = k * 1.4; } }); },
   padlockToLeaf() { const p = OBJ.padlock; OBJ.oldLeaf.add(p); p.position.set(p.userData.home.x - 6.7, p.userData.home.y, .06); },
   padlockHome() {
-    const p = OBJ.padlock; OBJ.corr.add(p); p.position.copy(p.userData.home); p.rotation.set(0, 0, 0); OBJ.padShackle.position.y = .06;
+    const p = OBJ.padlock; OBJ.corr.add(p); p.position.copy(p.userData.home); p.rotation.set(0, 0, 0); OBJ.padShackle.position.y = .06; p.visible = OBJ.padNote.visible = true;
     OBJ.oldDoor.visible = OBJ.oldKnob.visible = true; OBJ.oldLeaf.visible = OBJ.oldDark.visible = false; OBJ.oldLeaf.rotation.y = 0;
   },
   keyPadlock() { const k = OBJ.padKey; k.visible = true; tween({ delay: .4, dur: .6, ease: 'io', on: t => { k.rotation.z = t * 1.5; } }); },
   newKey() { OBJ.newKey.visible = true; },
+  // a porta dos espelhos: a chave serve, gira e não sai mais
+  mirKey() { const k = OBJ.mirKey; k.visible = true; tween({ delay: .4, dur: .6, ease: 'io', on: t => { k.rotation.z = t * 1.5; } }); },
+  mirDoorOpen() {
+    OBJ.mirClosed.visible = false; OBJ.mirLeaf.visible = OBJ.mirDark.visible = true;
+    tween({ delay: .3, dur: 2.2, ease: 'io', on: k => { OBJ.mirLeaf.rotation.y = k * 1.35; } });
+  },
+  mirRattle() { const d = OBJ.mirDoor; [0, .13, .26].forEach(t => tween({ delay: t, dur: .1, ease: 'lin', on: k => { d.position.x = 9.6 + Math.sin(k * Math.PI) * .012; } })); },
+  newRattle() { const d = OBJ.newDoor; [0, .13, .26].forEach(t => tween({ delay: t, dur: .1, ease: 'lin', on: k => { d.position.x = 8.4 + Math.sin(k * Math.PI) * .012; } })); },
+  /* o corredor vermelho como ela deixou neste ciclo: a porta nova só existe depois da chave;
+     uma porta já aberta é só um buraco preto na parede */
+  doorsSync() {
+    const f = G.flags;
+    OBJ.newDoor.visible = !!f.chave;
+    if (f.revAberta) { OBJ.oldDoor.visible = OBJ.oldKnob.visible = OBJ.oldLeaf.visible = false; OBJ.oldDark.visible = true; OBJ.padlock.visible = OBJ.padNote.visible = false; }
+    if (f.elevAberta) { OBJ.newDoorParts.forEach(p => { p.visible = false; }); OBJ.newLeaf.visible = false; OBJ.newDark.visible = true; }
+    if (f.espAberta) { OBJ.mirClosed.visible = OBJ.mirLeaf.visible = false; OBJ.mirDark.visible = true; }
+  },
+  /* a sala branca como ela deixou: o buraco de algo que ainda se pode pegar está aberto; o do que já foi pego, tapado */
+  holesSync() {
+    const k = !G.flags.chave, q = !G.flags.lanterna;
+    OBJ.holes[0].scale.setScalar(k ? 1 : .001); OBJ.holes[1].scale.setScalar(q ? 1 : .001); OBJ.holes[2].scale.setScalar(q ? 1 : .001);
+    [[0, k], [1, q]].forEach(([i, aberto]) => { const p = OBJ.patches[i]; p.visible = !aberto; p.material.opacity = 1; });
+    OBJ.qLight.intensity = 0; OBJ.key.visible = false;
+  },
   // sala escura e sala branca
   floorNoteOff() { OBJ.floorNote.visible = false; },
   darkDoorShut() { OBJ.darkDoor.rotation.y = 0; OBJ.darkFlood.intensity = 0; OBJ.strip.visible = true; OBJ.stripLight.intensity = .9; },
@@ -3405,6 +3634,7 @@ const FX_V12 = {
 function resetV12() {
   Object.keys(LOOPS).forEach(k => loopSnd(k)); OBJ.typing = OBJ.sewing = false;
   FX_V12.padlockHome(); OBJ.padKey.visible = false; OBJ.padKey.rotation.z = 0; OBJ.newKey.visible = false;
+  OBJ.mirClosed.visible = true; OBJ.mirKey.visible = false; OBJ.mirKey.rotation.z = 0; OBJ.mirLeaf.visible = OBJ.mirDark.visible = false; OBJ.mirLeaf.rotation.y = 0; OBJ.mirDoor.position.x = 9.6;
   OBJ.fingers.forEach(f => { f.visible = false; }); OBJ.drip.visible = false; OBJ.drip.scale.y = .01;
   OBJ.trail.visible = OBJ.trail2.visible = OBJ.trail3.visible = false; OBJ.bucket.visible = OBJ.bucketPaint.visible = true;
   OBJ.frames.forEach((g, i) => { g.position.x = OBJ.frameHome[i]; }); OBJ.frameTrap.visible = false; OBJ.frameTrap.position.y = .03; OBJ.extraFrame.visible = false;
@@ -3578,11 +3808,18 @@ const DAT = { mem: 'rascunho', sim: { vez: 'dat', v: ['datilografo', 'datilograf
 const REV = { vez: 'rev', v: ['revisao', 'revisaoVolta'] };
 const PORTA = { vez: 'porta', v: ['portaSemNome', 'portaVolta'] };
 const TENT = { vez: 'tentativa', v: ['tentativa1', 'tentativa2', 'tentativa3'] };
+/* as portas do corredor vermelho: a do cadeado abre com a sequência (as quatro marcas); a dos espelhos e a nova, com a chave.
+   Uma porta aberta neste ciclo fica aberta: na volta, é um buraco preto na parede, e entrar é só atravessar */
+const CAD_PORTA = { flag: 'revAberta', sim: 'revisaoEntra', nao: CAD };
+const FECH = { vez: 'fech', v: ['portaFechadura', null] };
+const ESP_PORTA = { flag: 'espAberta', sim: 'espelhosVolta', nao: { flag: 'chavePresa', sim: FECH, nao: { flag: 'chave', sim: 'espelhos', nao: FECH } } };   // com a chave presa no elevador, trancada de novo
+const NOVA_PORTA = { flag: 'elevAberta', sim: 'elevadorVolta', nao: { flag: 'chavePresa', sim: { vez: 'novaF', v: ['portaNovaPresa', null] }, nao: 'elevador' } };   // a chave ficou na outra porta
 const NOMEQ = { 1: { vez: 'nomeQ', v: ['nomeQualquer1', 'nomeQualquer2F', 'nomeQualquer3F'] }, 2: { vez: 'nomeQ', v: ['nomeQualquer1', 'nomeQualquer2', 'nomeQualquer3'] } };
 
 /* ---------- escolhas que se repetem ---------- */
 const INICIO_Q = { q: '?', opts: [['Esquerda', 40, ESQ], ['Direita', 60, DIR]] };
-const DIR_Q = { q: '?', opts: [['Entrar na porta', 30, CAD], ['Seguir o vermelho', 70, VERM], ['Voltar ao corredor branco', 10, 'corredorVolta']] };
+const DIR_Q = { q: '?', opts: [['A porta do cadeado', 25, CAD_PORTA], ['A porta com fechadura', 15, ESP_PORTA], ['A porta nova', 15, NOVA_PORTA, { req: 'chave', oculta: true }],
+  ['Seguir o vermelho', 40, VERM], ['Voltar ao corredor branco', 5, 'corredorVolta']] };
 const ESQ_Q = { q: '?', opts: [['Estender o braço', 40, 'fio', 'fio'], ['Oferecer a fita', 10, 'trocaFita', { feito: 'deuFita', req: 'fita' }], ['Ir até a porta', 35, PORTA], ['Voltar', 15, 'esquerdaSai']] };
 const PORTA_Q = { q: '?', opts: [['Escrever um nome qualquer', 40, NOMEQ], ['Escrever seu nome', 30, 'nomeRiscado', { feito: 'riscou', req: 'nome' }],
   ['Escrever seu nome, como pede a errata', 20, 'pontoFinal', { req: 'nome,errata', oculta: true }], ['Voltar', 10, ESQ_VOLTA]] };
@@ -3591,7 +3828,8 @@ const CAD_Q = { q: '?', opts: [['Girar as quatro marcas, na ordem', 25, 'revisao
   ['Tentar uma combinação', 25, TENT], ['Comparar a letra do bilhete', 10, 'letraFalsa', { feito: 'comparou', req: 'letra', oculta: true }], ['Voltar', 10, DIR]] };
 const REV_Q = { q: '?', opts: [['Ler a página aberta', 35, 'errata', 'leuErrata'], ['Olhar pela janela', 25, 'janela', 'janela'], ['Assinar o livro', 20, 'encadernada'], ['Voltar ao corredor', 20, 'revisaoSai']] };
 const SALA_Q = { q: 'ESCOLHA', opts: [['?', 56, 'buraco', 'lanterna'], ['Chave', 44, 'chave', 'chave'], ['Sentar e esperar', 10, 'salaVazia', { req: 'lanterna,chave', oculta: true }], ['Voltar pelo corredor vermelho', 10, 'salaSai']] };
-const ELEV_Q = { q: '?', opts: [['Botão de cima', 34, { vez: 'cima', v: ['andarCima', 'andarCima2', null] }], ['Botão do meio', 28, { vez: 'meio', v: ['andarMeio', 'andarMeio2'] }], ['Botão de baixo', 38, { mem: 'digital', sim: { vez: 'baixo', v: ['andarBaixo', null] }, nao: { vez: 'baixoF', v: ['botaoBaixo', null] } }]] };
+const ELEV_Q = { q: '?', opts: [['Botão de cima', 30, { vez: 'cima', v: ['andarCima', 'andarCima2', null] }], ['Botão do meio', 24, { vez: 'meio', v: ['andarMeio', 'andarMeio2'] }],
+  ['Botão da seta: voltar ao corredor', 14, 'elevadorSai'], ['Botão de baixo', 32, { mem: 'digital', sim: { vez: 'baixo', v: ['andarBaixo', null] }, nao: { vez: 'baixoF', v: ['botaoBaixo', null] } }]] };
 const CIMA_Q = { q: '?', opts: [['Correr para a cabine', 50, 'correrCabine'], ['Seguir o fio', 25, 'seguirFio', { feito: 'achouNome', req: 'fio' }], ['Procurar no escuro', 25, 'asCegas', 'achouNome']] };
 const MEIO_Q = { q: '?', opts: [['Deitar na cama', 45, 'deitar'], ['Pegar o relógio', 20, 'relogio', 'pegouRelogio'], ['Voltar ao elevador', 35, 'voltaQuarto']] };
 const DAT_Q = { q: '?', opts: [['Ler o que está escrito', 40, 'rascunhos', 'leuRolo'], ['Tirar o papel da máquina', 30, 'emBranco'], ['Pedir a máquina', 30, 'pedido', { feito: 'pediu', req: 'letra' }]] };
@@ -3774,15 +4012,15 @@ const STORY = {
 
   /* ================= a Direita: o corredor vermelho ================= */
   direita: { conta: 'direita', beats: [
-    { cam: [{ p: [0, 1.6, -8.4], l: [0, 1.45, -12], d: 3.4, walk: 1 }, Object.assign({ d: 2 }, T_TURN)], choiceAt: 5600, choice: DIR_Q },
+    { fx: 'doorsSync', cam: [{ p: [0, 1.6, -8.4], l: [0, 1.45, -12], d: 3.4, walk: 1 }, Object.assign({ d: 2 }, T_TURN)], choiceAt: 5600, choice: DIR_Q },
   ] },
   /* de volta ao corredor vermelho: o rastro do balde cresce; depois o balde some */
   direitaVolta: { conta: 'direita', beats: [
-    { fx: ['place', 'trail2'], place: '-', env: 'corridor', amb: 'room', cam: { p: [1.2, 1.6, -8.8], l: [6, .2, -9.4], d: 2.6, walk: 1 }, veil: { o: 0, d: 1600 }, auto: 3000 },
+    { fx: ['place', 'trail2', 'doorsSync'], place: '-', env: 'corridor', amb: 'room', cam: { p: [1.2, 1.6, -8.8], l: [6, .2, -9.4], d: 2.6, walk: 1 }, veil: { o: 0, d: 1600 }, auto: 3000 },
     { cam: { p: [1.4, 1.6, -8.8], l: [10, 1.35, -8.8], d: 2 }, choiceAt: 2000, choice: DIR_Q },
   ] },
   direitaVolta2: { conta: 'direita', beats: [
-    { fx: ['place', 'trail3'], place: '-', env: 'corridor', amb: 'room', cam: { p: [1.2, 1.6, -8.8], l: [7, .1, -9.8], d: 2.6, walk: 1 }, veil: { o: 0, d: 1600 }, auto: 3200 },
+    { fx: ['place', 'trail3', 'doorsSync'], place: '-', env: 'corridor', amb: 'room', cam: { p: [1.2, 1.6, -8.8], l: [7, .1, -9.8], d: 2.6, walk: 1 }, veil: { o: 0, d: 1600 }, auto: 3200 },
     { cam: { p: [1.4, 1.6, -8.8], l: [10, 1.35, -8.8], d: 2 }, choiceAt: 2000, choice: DIR_Q },
   ] },
 
@@ -3839,11 +4077,15 @@ const STORY = {
   ] },
   /* as quatro marcas, na ordem: a sala de revisão */
   revisaoAbre: { next: REV, beats: [
-    { note: 'marcas4', sfx: 'paper', hold: true },                                                                                     // ela gira os discos olhando as próprias mãos
+    { flag: 'revAberta', note: 'marcas4', sfx: 'paper', hold: true },                                                                                     // ela gira os discos olhando as próprias mãos
     { note: null, fx: 'discs', sfx: 'disc', cam: PADLOCK, auto: 1400 },
     { sfx: 'disc', auto: 900 }, { sfx: 'disc', auto: 900 }, { sfx: 'disc', auto: 1200 },
     { fx: 'padFall', sfx: 'fall', cam: { l: [7.4, .1, -9.6], d: 1.6 }, auto: 2400 },                                                   // o cadeado cai no rastro de tinta
     { fx: 'oldDoorOpen', sfx: 'creak', cam: { p: [7.2, 1.6, -9.3], l: [7.2, 1.4, -11], d: 2 }, veil: { c: '#fff', o: 1, d: 1400, delay: 1200 }, auto: 2800 },
+  ] },
+  /* a porta do cadeado, já aberta neste ciclo: um buraco preto; ela atravessa */
+  revisaoEntra: { next: REV, beats: [
+    { fx: 'doorsSync', sfx: 'steps', cam: [{ p: [6.4, 1.6, -8.7], l: [7.2, 1.2, -10], d: 3, walk: 1 }, { p: [7.2, 1.6, -9.6], l: [7.2, 1.4, -11], d: 1.6, walk: 1 }], veil: { c: '#fff', o: 1, d: 1400, delay: 3000 }, auto: 4600 },
   ] },
   revisao: { conta: 'rev', beats: [
     { fx: ['place', 'winView'], place: 'revisao', win: 'who', env: 'revisao', amb: 'room', cam: { p: [600, 1.6, 1.4], l: [600, 1.4, -1.9], cut: 1 }, veil: { o: 0, d: 2400 }, auto: 2800 },   // pequena e limpa; a única com janela
@@ -3868,7 +4110,7 @@ const STORY = {
   ] },
   revisaoSai: { beats: [
     { sfx: 'steps', cam: [{ p: [600, 1.6, .4], l: [600, 1.5, 2], d: 1.6 }, { p: [600, 1.6, 1.5], l: [600, 1.5, 3], d: 2, walk: 1 }], veil: { c: '#000', o: 1, d: 1200, delay: 2400 }, auto: 3800 },
-    { fx: 'place', place: '-', env: 'corridor', amb: 'room', cam: { p: [6.8, 1.6, -9.3], l: [3, 1.4, -8.8], cut: 1 }, veil: { o: 0, d: 1800 }, auto: 2000 },
+    { fx: ['place', 'doorsSync'], place: '-', env: 'corridor', amb: 'room', cam: { p: [6.8, 1.6, -9.3], l: [3, 1.4, -8.8], cut: 1 }, veil: { o: 0, d: 1800 }, auto: 2000 },
   ], next: DIR },
   /* a janela: quem acorda lá embaixo tem o cabelo dela. ou parecido. */
   janela: { next: REV, beats: [
@@ -3962,13 +4204,13 @@ const STORY = {
   ] },
   /* de volta à sala branca: o que ela já pegou neste ciclo não se oferece de novo; do bilhete da regra sobrou o prego */
   salaVolta: { conta: 'sala', beats: [
-    { fx: ['place', 'ruleGone', 'lampSwing', 'whiteLight'], place: '-', env: 'white', amb: 'room', cam: { p: [120, 1.62, -1.7], l: [120, 1.9, -3], d: 2.6 }, veil: { o: 0, d: 1600 }, auto: 3000 },
+    { fx: ['place', 'ruleGone', 'lampSwing', 'whiteLight', 'holesSync'], place: '-', env: 'white', amb: 'room', cam: { p: [120, 1.62, -1.7], l: [120, 1.9, -3], d: 2.6 }, veil: { o: 0, d: 1600 }, auto: 3000 },
     { cam: { p: [120.62, 1.56, -2.2], l: [120.7, 1.45, -3], d: 2.2 }, auto: 2800 },
     { cam: { p: [120, 1.6, -1.1], l: [120, 1.62, -3], d: 2.2 }, choice: SALA_Q },
   ] },
   /* a sala branca pela terceira vez: a lâmpada apagada, a luz vem do chão, e alguém escreveu na parede */
   salaVolta2: { conta: 'sala', beats: [
-    { fx: ['place', 'ruleGone', 'salaDim'], place: '-', env: 'whiteDim', amb: 'dark', cam: { p: [120, 1.6, .6], l: [120, .2, -2], d: 2.6 }, veil: { o: 0, d: 1800 }, auto: 3000 },
+    { fx: ['place', 'ruleGone', 'salaDim', 'holesSync'], place: '-', env: 'whiteDim', amb: 'dark', cam: { p: [120, 1.6, .6], l: [120, .2, -2], d: 2.6 }, veil: { o: 0, d: 1800 }, auto: 3000 },
     { cam: { p: [120, 1.62, -1.2], l: [120, 1.86, -3], d: 2.6 }, auto: 3400 },                                                         // AINDA AQUI?
     { cam: { p: [120, 1.6, -1.1], l: [120, 1.62, -3], d: 1.8 }, choice: SALA_Q },
   ] },
@@ -3981,7 +4223,7 @@ const STORY = {
   salaSai: { next: DIR, beats: [
     { fx: 'sideDoor', sfx: 'steps', cam: { p: [119.1, 1.6, .9], l: [117.5, 1.2, 1.0], d: 2.6, walk: 1 }, auto: 2800 },
     { fx: 'sideDoorOpen', sfx: 'creak', cam: { p: [118.1, 1.6, 1.0], l: [116.5, 1.4, 1.0], d: 2.4, walk: 1 }, veil: { c: '#000', o: 1, d: 1400, delay: 900 }, auto: 2700 },
-    { fx: 'place', place: '-', env: 'corridor', amb: 'dark', sfx: 'steps', cam: { p: [12.5, 1.6, -8.8], l: [4, 1.3, -8.8], cut: 1 }, veil: { o: 0, d: 2200 }, auto: 2400 },
+    { fx: ['place', 'doorsSync'], place: '-', env: 'corridor', amb: 'dark', sfx: 'steps', cam: { p: [12.5, 1.6, -8.8], l: [4, 1.3, -8.8], cut: 1 }, veil: { o: 0, d: 2200 }, auto: 2400 },
     { sfx: 'steps', cam: { p: [6, 1.6, -8.8], l: [2, 1.3, -8.8], d: 3.6, walk: 1 }, auto: 3800 },
   ] },
   /* sentar e esperar, depois de pegar tudo o que a sala tinha */
@@ -4019,24 +4261,51 @@ const STORY = {
     { note: 'semLuz', sfx: 'paper', hold: true },
     { note: null, fx: 'roomDoorClose', sfx: 'slam', env: 'white', amb: 'room', cam: { p: [120, 1.6, 1.6], l: [120, 1.2, 3], d: 1.4 }, auto: 2200 },
   ] },
-  /* permanecer no cômodo: pela porta lateral até o corredor vermelho, onde agora há duas portas. Uma chave, duas portas. */
+  /* permanecer no cômodo: pela porta lateral até o corredor vermelho, onde agora há uma porta nova. Uma chave, duas portas
+     (a dos espelhos e a nova); a do cadeado não tem fechadura de chave */
   permanecer: { beats: [
     { fx: 'sideDoor', sfx: 'steps', cam: { p: [119.1, 1.6, .9], l: [117.5, 1.2, 1.0], d: 2.6, walk: 1 }, auto: 2800 },
     { fx: 'sideDoorOpen', sfx: 'creak', cam: { p: [118.1, 1.6, 1.0], l: [116.5, 1.4, 1.0], d: 2.4, walk: 1 }, veil: { c: '#000', o: 1, d: 1400, delay: 900 }, auto: 2700 },
-    { env: 'corridor', amb: 'dark', fx: ['twoDoors', 'padlockHome'], sfx: 'steps', cam: { p: [4.6, 1.6, -8.8], l: [7.8, 1.1, -9.9], cut: 1 }, veil: { o: 0, d: 2200 }, auto: 2600 },
-    { sfx: 'steps', cam: { p: [6.1, 1.6, -7.9], l: [7.9, 1.05, -10], d: 3.2, walk: 1 }, choiceAt: 3400,
-      choice: { q: '?', opts: [['Entrar na porta trancada', 50, 'espelhos', { req: 'chave,!chavePresa' }], ['Entrar na porta nova', 50, 'elevador', { req: 'chave,!chavePresa' }]] } },
+    { env: 'corridor', amb: 'dark', fx: ['padlockHome', 'doorsSync'], sfx: 'steps', cam: { p: [4.6, 1.6, -8.8], l: [8.4, 1.1, -9.9], cut: 1 }, veil: { o: 0, d: 2200 }, auto: 2600 },
+    { sfx: 'steps', cam: { p: [6.4, 1.6, -7.9], l: [8.4, 1.05, -10], d: 3.2, walk: 1 }, choiceAt: 3400, choice: DIR_Q },
   ] },
 
-  /* a porta trancada: a chave serve no cadeado, gira, e não sai mais. Lá dentro, espelhos cobertos */
+  /* a porta com fechadura: a chave serve, gira, e não sai mais. Lá dentro, espelhos cobertos */
   espelhos: { beats: [
-    { sfx: 'steps', cam: [{ p: [6.2, 1.6, -8.4], l: [7.2, 1.2, -10], d: 1.8, walk: 1 }, { p: [7.15, 1.6, -9.1], l: [7.4, 1.0, -10], d: 1.6, walk: 1 }], auto: 3500 },
-    { flag: 'chavePresa', fx: 'keyPadlock', sfx: 'knob', cam: { p: [7.38, 1.36, -9.55], l: [7.47, 1.12, -9.93], d: 1.2 }, auto: 2400 },
-    { fx: ['padOpen', 'padlockToLeaf', 'oldDoorOpen'], sfx: 'creak', cam: { p: [7.2, 1.6, -9.3], l: [7.2, 1.4, -11], d: 2 }, veil: { c: '#000', o: 1, d: 1300, delay: 1000 }, auto: 2500 },
+    { sfx: 'steps', cam: [{ p: [8.6, 1.6, -8.5], l: [9.6, 1.2, -10], d: 3, walk: 1 }, { p: [9.55, 1.6, -9.1], l: [9.8, 1.0, -10], d: 1.6, walk: 1 }], auto: 4700 },
+    { flag: ['chavePresa', 'espAberta'], fx: 'mirKey', sfx: 'knob', cam: { p: [9.86, 1.36, -9.55], l: [9.96, 1.0, -9.95], d: 1.2 }, auto: 2400 },
+    { fx: 'mirDoorOpen', sfx: 'creak', cam: { p: [9.6, 1.6, -9.3], l: [9.6, 1.4, -11], d: 2 }, veil: { c: '#000', o: 1, d: 1300, delay: 1000 }, auto: 2500 },
     { fx: 'place', place: 'mirror', env: 'mirror', amb: 'room', cam: { p: [180, 1.6, 2.1], l: [180, 1.3, -2.5], cut: 1 }, veil: { o: 0, d: 2400 }, auto: 3000 },
     { sfx: 'steps', cam: [{ p: [180, 1.6, 1.0], l: [178, 1.3, -.6], d: 2.6, walk: 1 }, { p: [180, 1.6, .5], l: [181.8, 1.3, .3], d: 2.4 }], auto: 5200 },
     { sfx: 'steps', cam: { p: [180, 1.6, -.7], l: [180, 1.45, -2.5], d: 3.2, walk: 1 }, choiceAt: 3600,
-      choice: { q: '?', opts: [['Cobrir o espelho', 52, { mem: 'nome', sim: 'espelhoCobrir', nao: { vez: 'espVazio', v: ['espelhoVazio', null] } }], ['Continuar olhando', 48, 'espelhoPortal']] } },
+      choice: { q: '?', opts: [['Cobrir o espelho', 45, { mem: 'nome', sim: 'espelhoCobrir', nao: { vez: 'espVazio', v: ['espelhoVazio', null] } }], ['Continuar olhando', 45, 'espelhoPortal', 'portal'],
+        ['Voltar ao corredor', 10, 'espelhosSai']] } },
+  ] },
+  /* a porta dos espelhos, já aberta neste ciclo: um buraco preto na parede; ela atravessa */
+  espelhosVolta: { next: 'espelhos', nextAt: 4, beats: [
+    { fx: 'doorsSync', sfx: 'steps', cam: [{ p: [8.6, 1.6, -8.5], l: [9.6, 1.2, -10], d: 3, walk: 1 }, { p: [9.6, 1.6, -9.6], l: [9.6, 1.4, -11], d: 1.6, walk: 1 }], veil: { c: '#000', o: 1, d: 1200, delay: 3400 }, auto: 4800 },
+    { fx: ['place', 'mirrorCalm'], place: 'mirror', env: 'mirror', amb: 'room', cam: { p: [180, 1.6, 2.1], l: [180, 1.3, -2.5], cut: 1 }, veil: { o: 0, d: 2400 }, auto: 2800 },
+  ] },
+  /* de volta ao corredor pela porta dos espelhos */
+  espelhosSai: { beats: [
+    { sfx: 'steps', cam: [{ p: [180, 1.6, -.5], l: [180, 1.5, 2.5], d: 1.6 }, { p: [180, 1.6, 1.9], l: [180, 1.5, 3], d: 2.2, walk: 1 }], veil: { c: '#000', o: 1, d: 1200, delay: 2400 }, auto: 3800 },
+    { fx: ['place', 'doorsSync'], place: '-', env: 'corridor', amb: 'room', cam: { p: [9.6, 1.6, -9.3], l: [4, 1.4, -8.8], cut: 1 }, veil: { o: 0, d: 1800 }, auto: 2000 },
+    { sfx: 'steps', cam: { p: [8.4, 1.6, -8.8], l: [3, 1.35, -8.8], d: 2, walk: 1 }, choiceAt: 2000, choice: DIR_Q },
+  ] },
+  /* a porta com fechadura, sem a chave: não cede; no espelhinho oval, na altura do rosto, ninguém; do outro lado, um pano cai */
+  portaFechadura: { conta: 'fech', beats: [
+    { fx: 'doorsSync', sfx: 'steps', cam: [{ p: [8.4, 1.6, -8.6], l: [9.6, 1.3, -10], d: 3.4, walk: 1 }, { p: [9.5, 1.6, -9.2], l: [9.6, 1.4, -10], d: 1.6, walk: 1 }], auto: 5200 },
+    { fx: 'mirRattle', sfx: 'locked', cam: { p: [9.75, 1.4, -9.5], l: [9.96, 1.0, -9.95], d: 1.4 }, auto: 2200 },                     // a maçaneta não gira; a fechadura é de chave
+    { cam: { p: [9.6, 1.6, -9.45], l: [9.6, 1.58, -9.96], d: 1.8 }, auto: 2600 },                                                      // no espelhinho, ninguém
+    { sfx: 'flap', say: say('FLAP', 66, 40, { ink: 1 }), auto: 2400 },                                                                  // do outro lado, um pano cai
+    { cam: { p: [8.6, 1.6, -8.8], l: [3, 1.35, -8.8], d: 2.4, walk: 1 }, choiceAt: 2400, choice: DIR_Q },
+  ] },
+  /* a porta nova, depois que a chave ficou presa na dos espelhos: não cede */
+  portaNovaPresa: { conta: 'novaF', beats: [
+    { fx: 'doorsSync', sfx: 'steps', cam: [{ p: [7.6, 1.6, -8.7], l: [8.4, 1.2, -10], d: 3, walk: 1 }, { p: [8.35, 1.6, -9.2], l: [8.6, 1.0, -10], d: 1.4, walk: 1 }], auto: 4600 },
+    { fx: 'newRattle', sfx: 'locked', auto: 2000 },                                                                                    // a chave dela ficou na outra porta
+    { cam: { p: [8.4, 1.6, -9.0], l: [9.6, 1.1, -9.95], d: 1.8 }, auto: 2400 },                                                        // ao lado, a porta dos espelhos aberta
+    { cam: { p: [7.8, 1.6, -8.8], l: [3, 1.35, -8.8], d: 2.2, walk: 1 }, choiceAt: 2200, choice: DIR_Q },
   ] },
   /* sem saber o próprio nome, ela não tem reflexo para perder: os lençóis caem e não há ninguém */
   espelhoVazio: { conta: 'espVazio', next: 'espelhos', nextAt: 5, beats: [
@@ -4059,7 +4328,7 @@ const STORY = {
   ] },
   /* continuar olhando: o espelho cede; do outro lado, o avesso da parede dos buracos, e o braço que recua */
   espelhoPortal: { beats: [
-    { fx: 'mirrorDim', sfx: 'tension', cam: { p: [180, 1.6, -1.3], l: [180, 1.5, -2.5], d: 3.2, e: 'sine' }, auto: 3600 },
+    { flag: 'portal', fx: 'mirrorDim', sfx: 'tension', cam: { p: [180, 1.6, -1.3], l: [180, 1.5, -2.5], d: 3.2, e: 'sine' }, auto: 3600 },
     { fx: 'mirrorHoles', auto: 2800 },
     { fx: 'mirrorRipple', sfx: 'whoosh', cam: { p: [180, 1.6, -2.4], l: [180, 1.5, -4], d: 2.2, walk: 1 }, veil: { c: '#000', o: 1, d: 1100, delay: 1000 }, auto: 2600 },
     { fx: ['place', 'avesso'], place: 'avesso', env: 'dark', amb: 'dark', cam: { p: [121.7, 1.6, -4.0], l: [120.4, 1.4, -3.1], cut: 1 }, veil: { o: 0, d: 2600 }, auto: 3000 },
@@ -4080,12 +4349,24 @@ const STORY = {
   /* ================= o elevador ================= */
   elevador: { beats: [
     { sfx: 'steps', cam: [{ p: [7.0, 1.6, -8.6], l: [8.4, 1.1, -10], d: 1.8, walk: 1 }, { p: [8.35, 1.6, -9.1], l: [8.6, 1.0, -10], d: 1.6, walk: 1 }], auto: 3500 },
-    { flag: 'chavePresa', fx: 'newKey', sfx: 'knob', auto: 1800 },                                                                    // a chave serve; gira, e não sai mais
+    { flag: ['chavePresa', 'elevAberta'], fx: 'newKey', sfx: 'knob', auto: 1800 },                                                                    // a chave serve; gira, e não sai mais
     { fx: 'newDoorOpen', sfx: 'creak', cam: { p: [8.4, 1.6, -9.3], l: [8.4, 1.4, -11], d: 2 }, veil: { c: '#000', o: 1, d: 1300, delay: 1000 }, auto: 2500 },
     { fx: 'place', place: 'elevator', env: 'elevator', amb: 'dark', cam: { p: [240, 1.6, 1.1], l: [240, 1.25, -2.2], cut: 1 }, veil: { o: 0, d: 2400 }, auto: 3000 },
     { sfx: 'steps', cam: { p: [240, 1.6, -.6], l: [240, 1.3, -2.6], d: 2.6, walk: 1 }, auto: 2800 },
     { sfx: 'steps', cam: [{ p: [240, 1.6, -2.15], l: [240, 1.4, -3], d: 1.8, walk: 1 }, { p: [240.1, 1.6, -2.3], l: [240.69, 1.28, -1.97], d: 1.6 }], auto: 3600 },
     { cam: { p: [240.2, 1.6, -2.3], l: [240.69, 1.3, -1.97], d: 1.2 }, choiceAt: 1300, choice: ELEV_Q },
+  ] },
+  /* o botão da seta, acima do vermelho: a cabine sobe de volta ao corredor vermelho; a porta nova fica aberta atrás dela */
+  elevadorSai: { beats: [
+    { cam: { p: [240.42, 1.3, -2.0], l: [240.69, 1.25, -1.97], d: 1.4 }, sfx: 'click', auto: 1800 },                                   // a seta vermelha, acima do dedo pintado
+    { fx: 'grateClose', cab: 'elev', sfx: 'creak', cam: { p: [240.1, 1.6, -2.3], l: [240, 1.4, -1], d: 1.4 }, auto: 1600 },
+    { fx: 'ride', veil: { c: '#000', o: 1, d: 900 }, shake: .02, sfx: 'tension', auto: 3000 },
+    { fx: ['place', 'doorsSync'], place: '-', env: 'corridor', amb: 'room', shake: 0, cam: { p: [8.4, 1.6, -9.6], l: [8.4, 1.4, -7.6], cut: 1 }, veil: { o: 0, d: 1600 }, auto: 2000 },
+    { sfx: 'steps', cam: { p: [7.6, 1.6, -8.8], l: [3, 1.35, -8.8], d: 2.2, walk: 1 }, choiceAt: 2200, choice: DIR_Q },
+  ] },
+  /* a porta nova, já aberta neste ciclo: um buraco preto; ela atravessa até a antessala do elevador */
+  elevadorVolta: { next: 'elevador', nextAt: 3, beats: [
+    { fx: 'doorsSync', sfx: 'steps', cam: [{ p: [7.6, 1.6, -8.7], l: [8.4, 1.2, -10], d: 2.6, walk: 1 }, { p: [8.4, 1.6, -9.6], l: [8.4, 1.4, -11], d: 1.6, walk: 1 }], veil: { c: '#000', o: 1, d: 1200, delay: 3000 }, auto: 4400 },
   ] },
   voltaElevador: { next: 'elevador', nextAt: 6, beats: [
     { veil: { c: '#000', o: 1, d: 700 }, sfx: 'tension', shake: .02, auto: 2200 },
@@ -4177,7 +4458,7 @@ const STORY = {
 
   /* sem a digital: o botão de baixo não afunda; o dedo vermelho pintado nele fica onde o dela não chega */
   botaoBaixo: { conta: 'baixoF', next: 'elevador', nextAt: 6, beats: [
-    { cam: { p: [240.42, 1.2, -1.97], l: [240.69, 1.18, -1.97], d: 1.6 }, auto: 2200 },                                                 // o botão de baixo; o dedo vermelho pintado nele
+    { cam: { p: [240.42, 1.17, -1.97], l: [240.69, 1.15, -1.97], d: 1.6 }, auto: 2200 },                                                // o botão de baixo; o dedo vermelho pintado nele
     { fx: 'btnStuck', sfx: 'locked', auto: 2600 },                                                                                      // ela aperta: ele não afunda
     { auto: 2600 },                                                                                                                     // o dedo pintado é mais comprido que o dela
     { sfx: 'water', cam: { p: [240.1, 1.6, -2.2], l: [240, .6, -1.2], d: 2.2 }, auto: 3000 },                                          // pela fresta do chão da cabine, cheiro de água e de vela apagada
